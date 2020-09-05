@@ -1,0 +1,26 @@
+---
+title: "cFIT Tutorial"
+output: rmarkdown::html_vignette
+bibliography: bibfile.bib
+vignette: >
+  %\VignetteIndexEntry{tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(cFIT)
+
+devtools::load_all("/Users/minshipeng/Dropbox/research/cFIT/cFIT")
+
+
+
+
+```
