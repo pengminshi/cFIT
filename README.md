@@ -9,14 +9,6 @@ cFIT (common Factor Space Integration & Transfer) is a tool for data integration
 
 A preprint of the manuscript is available [here](https://www.biorxiv.org/content/10.1101/2020.08.31.276345v1)
 ```
-@article{Zhu2018,
-    title={Semi-soft Clustering of Single Cell Data},
-    author={Zhu, Lingxue and Lei, Jing and Devlin, Bernie and Roeder, Kathryn},
-    year={2018},
-    journal={bioRxiv},
-    doi={10.1101/285056}
-}
-
 @article{peng2020cfit,
   title={cFIT: Integration and transfer learning of single cell transcriptomes, illustrated by fetal brain cell development},
   author={Peng, Minshi and Li, Yue and Wamsley, Brie and Wei, Yuting and Roeder, Kathryn},
@@ -25,7 +17,7 @@ A preprint of the manuscript is available [here](https://www.biorxiv.org/content
   publisher={Cold Spring Harbor Laboratory}
 }
 ```
-
+The supplemental figure can be found [here](https://github.com/pengminshi/cFIT/blob/master/manuscript/suppl_Single_Cell_Integration_and_Transfer.pdf)
 
 ## Installation
 This package can be installed through `devtools` in R:
@@ -35,4 +27,4 @@ devtools::install_github("pengminshi/cFIT")
 ```
 
 ## Examples
-Please follow the [vignette](https://htmlpreview.github.io/?https://github.com/pengminshi/MRtree/blob/master/doc/MRtree-tutorial.html) for examples of using this R package on a simulated and real data sets.
+Please follow the [vignette](https://github.com/pengminshi/cFIT/blob/master/vignettes/tutorial.Rmd) (In progress) for examples of using this R package on a simulated and real data sets.
