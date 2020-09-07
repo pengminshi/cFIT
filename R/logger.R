@@ -6,13 +6,13 @@
 #'
 #' @import futile.logger
 #' @export
-log_to_file <- function(fn, logger='ROOT', newfile=False){
-    if (newfile){
-        if (file.exists(fn))
-            #Delete file if it exists
-            file.remove(fn)
+log_to_file <- function(fn, logger = "ROOT", newfile = False) {
+    if (newfile) {
+        if (file.exists(fn)) 
+            # Delete file if it exists
+        file.remove(fn)
     }
-    tmp = futile.logger::flog.appender(futile.logger::appender.file(fn), name=logger)
+    tmp = futile.logger::flog.appender(futile.logger::appender.file(fn), name = logger)
 }
 
 
@@ -22,8 +22,8 @@ log_to_file <- function(fn, logger='ROOT', newfile=False){
 #'
 #' @import futile.logger
 #' @export
-log_to_console <- function(logger='ROOT'){
-    tmp = futile.logger::flog.appender(futile.logger::appender.console(), name=logger)
+log_to_console <- function(logger = "ROOT") {
+    tmp = futile.logger::flog.appender(futile.logger::appender.console(), name = logger)
 }
 
 
@@ -35,13 +35,13 @@ log_to_console <- function(logger='ROOT'){
 #'
 #' @import futile.logger
 #' @export
-log_to_both <- function(fn, logger='ROOT', newfile=F){
-    if (newfile){
-        if (file.exists(fn))
-            #Delete file if it exists
-            file.remove(fn)
+log_to_both <- function(fn, logger = "ROOT", newfile = F) {
+    if (newfile) {
+        if (file.exists(fn)) 
+            # Delete file if it exists
+        file.remove(fn)
     }
-    tmp = futile.logger::flog.appender(futile.logger::appender.tee(fn), name=logger)
+    tmp = futile.logger::flog.appender(futile.logger::appender.tee(fn), name = logger)
 }
 
 
@@ -52,8 +52,8 @@ log_to_both <- function(fn, logger='ROOT', newfile=F){
 #'
 #' @import futile.logger
 #' @export
-set_log_level <- function(level='INFO', logger='ROOT'){
-    tmp = futile.logger::flog.threshold(level, name=logger)
+set_log_level <- function(level = "INFO", logger = "ROOT") {
+    tmp = futile.logger::flog.threshold(level, name = logger)
 }
 
 
@@ -64,18 +64,18 @@ set_log_level <- function(level='INFO', logger='ROOT'){
 #'
 #' @import futile.logger
 #' @export
-logmsg <- function(...,level='info'){
+logmsg <- function(..., level = "info") {
     msg = paste0(...)
-    if (level=='debug'){
+    if (level == "debug") {
         futile.logger::flog.debug(msg)
-    } else if (level == 'info'){
+    } else if (level == "info") {
         futile.logger::flog.info(msg)
-    } else if(level=='warn'){
+    } else if (level == "warn") {
         futile.logger::flog.warn(msg)
-    } else if (level == 'error'){
+    } else if (level == "error") {
         futile.logger::flog.error(msg)
     } else {
-        stop ('Log level not found!')
+        stop("Log level not found!")
     }
 }
 

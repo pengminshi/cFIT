@@ -31,28 +31,28 @@
 #'
 #' @import checkmate
 #' @export
-data_integrate <- function(X.list, r=15, max.niter=100, tol=1e-5,
-                           gamma=1e6, nrep=1, init = NULL, verbose=T, seed=0){
+CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 1e+06, nrep = 1, init = NULL, verbose = T, seed = 0) {
 
     m = length(X.list)
 
     # subset to the shared genes
     genes = colnames(X.list[[1]])
-    for (j in 1:m){
-        if (is.null(colnames(X.list[[j]]))){
-            stop('gene symbols missing for import X.list')
+    for (j in 1:m) {
+        if (is.null(colnames(X.list[[j]]))) {
+            stop("gene symbols missing for import X.list")
         }
         genes = genes[genes %in% colnames(X.list[[j]])]
     }
 
-    if (length(genes) < max(10, m)){
-        warning('Too few genes (', length(genes),'), check the data source')
+    if (length(genes) < max(10, m)) {
+        warning("Too few genes (", length(genes), "), check the data source")
     }
 
     p = length(genes)
     X.list = lapply(X.list, function(x) x[, genes])
 
-    if (verbose) logmsg('Integrate ', m, ' datasets (',p,' genes)')
+    if (verbose)
+        logmsg("Integrate ", m, " datasets (", p, " genes)")
 
     # total number of samples
     ntotal = sum(sapply(1:m, function(j) nrow(X.list[[j]])))
@@ -67,79 +67,85 @@ data_integrate <- function(X.list, r=15, max.niter=100, tol=1e-5,
 
     # run each repeat
     time.start = Sys.time()
-    for (rep in 1:nrep){
-        set.seed(seed+rep-1) # set random seed
+    for (rep in 1:nrep) {
+        set.seed(seed + rep - 1)  # set random seed
 
         # parameters known from previous iterations
-        if (all(c('W','lambda.list','b.list','H.list') %in% names(init))){
-            params.list = list(W=init$W, H.list=init$H.list,
-                               b.list=init$b.list, lambda.list=init$lambda.list)
+        if (all(c("W", "lambda.list", "b.list", "H.list") %in% names(init))) {
+            params.list = list(W = init$W, H.list = init$H.list, b.list = init$b.list,
+                               lambda.list = init$lambda.list)
         } else {
-            # initialize the parameters,
-            # W can be supplied or initialized
-            if(verbose) logmsg('Initialize W, H, b, Lambda ...')
-            params.list = initialize_params(X.list=X.list, r=r, gamma=gamma, W=init$W, verbose=verbose)
+            # initialize the parameters, W can be supplied or initialized
+            if (verbose)
+                logmsg("Initialize W, H, b, Lambda ...")
+            params.list = initialize_params(X.list = X.list, r = r, gamma = gamma, W = init$W, verbose = verbose)
         }
 
-        obj = objective_func(X.list=X.list, W=params.list$W, H.list=params.list$H.list,
-                             lambda.list=params.list$lambda.list, b.list=params.list$b.list, gamma=gamma)
-        if(verbose) logmsg('Objective for initialization = ', obj)
+        obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
+                             lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma)
+        if (verbose)
+            logmsg("Objective for initialization = ", obj)
 
         # initialize
         delta = Inf
-        converge=F
+        converge = F
 
         # solve 4 set of parameters iteratively
-        for (iter in 1:max.niter){
+        for (iter in 1:max.niter) {
 
-            obj.old = obj # save or calculating the gap
+            obj.old = obj  # save or calculating the gap
 
             # random permute update order to ensure convergence
-            params.to.update.list = sample(c('W','lambda','b','H'), 4, replace = F)
-            if(verbose) logmsg('iter ',iter, ', update by: ', paste(params.to.update.list, collapse = '->'))
+            params.to.update.list = sample(c("W", "lambda", "b", "H"), 4, replace = F)
+            if (verbose)
+                logmsg("iter ", iter, ", update by: ", paste(params.to.update.list, collapse = "->"))
 
-            for(params.to.update in params.to.update.list){
+            for (params.to.update in params.to.update.list) {
 
-                params.list = solve_subproblem(params.to.update = params.to.update,
-                                               X.list=X.list, W=params.list$W, H.list=params.list$H.list,
-                                               b.list=params.list$b.list, lambda.list=params.list$lambda.list,
-                                               gamma=gamma, verbose=verbose)
+                params.list = solve_subproblem(params.to.update = params.to.update, X.list = X.list,
+                                               W = params.list$W, H.list = params.list$H.list,
+                                               b.list = params.list$b.list, lambda.list = params.list$lambda.list,
+                  gamma = gamma, verbose = verbose)
             }
 
-            obj = objective_func(X.list=X.list, W=params.list$W, H.list=params.list$H.list,
-                                 lambda.list=params.list$lambda.list, b.list=params.list$b.list,gamma=gamma)
+            obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
+                                 lambda.list = params.list$lambda.list,
+                                 b.list = params.list$b.list, gamma = gamma)
 
             # relative difference of objective function
-            delta = abs(obj-obj.old) / mean(c(obj, obj.old))
-            if (verbose) logmsg('iter ',iter, ', objective=', obj, ', delta=diff/obj = ', delta)
+            delta = abs(obj - obj.old)/mean(c(obj, obj.old))
+            if (verbose)
+                logmsg("iter ", iter, ", objective=", obj, ", delta=diff/obj = ", delta)
 
             # check if converge
-            if (delta < tol){
-                logmsg('Converge at iter ', iter,', obj delta = ', delta)
-                converge=T
+            if (delta < tol) {
+                logmsg("Converge at iter ", iter, ", obj delta = ", delta)
+                converge = T
                 break
             }
         }
 
-        if (obj < obj.best){ # update to save the best results
+        if (obj < obj.best) {
+            # update to save the best results
             obj.best = obj
             params.list.best = params.list
-            niter.best=iter
-            delta.best=delta
+            niter.best = iter
+            delta.best = delta
             converge.best = converge
-            seed.best = seed+rep-1
+            seed.best = seed + rep - 1
         }
     }
-    time.elapsed = difftime(time1=Sys.time(), time2=time.start, units = 'auto')
+    time.elapsed = difftime(time1 = Sys.time(), time2 = time.start, units = "auto")
 
-    if (verbose){
-        logmsg('Finised in ', time.elapsed,' ', units(time.elapsed),'\nBest result with seed ', seed.best,
-               ':\nConvergence status: ', converge.best,' at ', niter.best,
-               ' iterations\nFinal objective delta:', delta.best)
+    if (verbose) {
+        logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\nBest result with seed ",
+               seed.best, ":\nConvergence status: ", converge.best, " at ",
+               niter.best, " iterations\nFinal objective delta:",
+            delta.best)
     }
 
-    if(!is.null(rownames(X.list[[1]]))){
-        params.list.best$H.list = lapply(1:m, function(j){
+    if (!is.null(rownames(X.list[[1]]))) {
+        params.list.best$H.list = lapply(1:m, function(j) {
             H = params.list.best$H.list[[j]]
             rownames(H) = rownames(X.list[[j]])
             H
@@ -147,15 +153,10 @@ data_integrate <- function(X.list, r=15, max.niter=100, tol=1e-5,
         rownames(params.list.best$W) = colnames(X.list[[1]])
     }
 
-    return(list(H.list = params.list.best$H.list,
-                W = params.list.best$W,
-                b.list = params.list.best$b.list,
-                lambda.list = params.list.best$lambda.list,
-                convergence = converge.best,
-                obj = obj.best,
-                niter = niter.best,
-                delta = delta.best,
-                params = list(gamma=gamma,max.niter=max.niter,tol=tol,nrep=nrep)))
+    return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list,
+                lambda.list = params.list.best$lambda.list, convergence = converge.best, obj = obj.best,
+        niter = niter.best, delta = delta.best, params = list(gamma = gamma, max.niter = max.niter,
+                                                              tol = tol, nrep = nrep)))
 }
 
 
@@ -171,19 +172,19 @@ data_integrate <- function(X.list, r=15, max.niter=100, tol=1e-5,
 #' @param gamma numeric scalar, parameter for the penalty term.
 #'
 #' @return numeric scalar, the value of the objective function
-objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma){
+objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
 
-    obj.list = lapply(1:length(X.list), function(j){
+    obj.list = lapply(1:length(X.list), function(j) {
         tmp1 = W %*% t(H.list[[j]])
-        tmp2 = matrix(1, nrow=nrow(X.list[[j]]), ncol=1) %*% b.list[[j]]
+        tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
         sum((X.list[[j]] - t(lambda.list[[j]] * tmp1) - tmp2)^2)
     })
 
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
 
-    penalty = gamma * sum((colSums(nvec/ ntotal * do.call(rbind, lambda.list) ) - 1)^2) # *ntotal /ntotal
-    obj = sum(do.call(c, obj.list))/ ntotal + penalty
+    penalty = gamma * sum((colSums(nvec/ntotal * do.call(rbind, lambda.list)) - 1)^2)  # *ntotal /ntotal
+    obj = sum(do.call(c, obj.list))/ntotal + penalty
 
     return(obj)
 }
@@ -205,22 +206,22 @@ objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma){
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return a list containing updated parameters: W, H.list, lambda.list,  b.list
-solve_subproblem <- function(params.to.update = c('W','lambda','b','H'),
-                             X.list, W, H.list, b.list, lambda.list, gamma, verbose=T){
+solve_subproblem <- function(params.to.update = c("W", "lambda", "b", "H"), X.list, W, H.list,
+                             b.list, lambda.list, gamma, verbose = T) {
     params.to.update = match.arg(params.to.update)
     m = length(X.list)
 
-    if (params.to.update == 'W'){
-        W = solve_W(X.list=X.list, H.list=H.list, lambda.list=lambda.list, b.list=b.list)
-    } else if (params.to.update == 'lambda'){
-        lambda.list = solve_lambda_list(X.list=X.list, W=W, H.list=H.list, b.list=b.list, gamma=gamma)
-    } else if (params.to.update == 'b'){
-        b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W=W, H=H.list[[j]], lambd=lambda.list[[j]]))
+    if (params.to.update == "W") {
+        W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list, b.list = b.list)
+    } else if (params.to.update == "lambda") {
+        lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list, gamma = gamma)
+    } else if (params.to.update == "b") {
+        b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W = W, H = H.list[[j]], lambd = lambda.list[[j]]))
     } else {
-        H.list = lapply(1:m, function(j)  solve_H(X=X.list[[j]], W=W, lambd=lambda.list[[j]], b=b.list[[j]]))
+        H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]], b = b.list[[j]]))
     }
 
-    return(list(W=W, lambda.list=lambda.list, b.list=b.list, H.list=H.list))
+    return(list(W = W, lambda.list = lambda.list, b.list = b.list, H.list = H.list))
 }
 
 
@@ -233,18 +234,18 @@ solve_subproblem <- function(params.to.update = c('W','lambda','b','H'),
 #' @param seed random seed used for random generation (default 0).
 #'
 #' @return a list containing initialized parameters: W, H.list, lambda.list,  b.list
-initialize_params_random <- function(X.list, r, seed=0){
+initialize_params_random <- function(X.list, r, seed = 0) {
     set.seed(seed)
     m = length(X.list)
     p = ncol(X.list[[1]])
     n.list = sapply(1:m, function(j) nrow(X.list[[j]]))
 
-    H.list = lapply(1:m, function(j) matrix(runif(n.list[j]*r, min=0, max=1), nrow=n.list[j], ncol=r))
-    W = matrix(runif(p*r,min=0,max=2), nrow=p)
+    H.list = lapply(1:m, function(j) matrix(runif(n.list[j] * r, min = 0, max = 1), nrow = n.list[j], ncol = r))
+    W = matrix(runif(p * r, min = 0, max = 2), nrow = p)
     lambda.list = lapply(1:m, function(i) rep(1, p))
-    b.list = lapply(1:m, function(i) rep(0,p))
+    b.list = lapply(1:m, function(i) rep(0, p))
 
-    return(list(W=W, H.list=H.list, lambda.list=lambda.list, b.list=b.list))
+    return(list(W = W, H.list = H.list, lambda.list = lambda.list, b.list = b.list))
 }
 
 
@@ -265,53 +266,53 @@ initialize_params_random <- function(X.list, r, seed=0){
 #'
 #' @return a list containing initialized parameters: W, H.list, lambda.list,  b.list
 #' @import checkmate
-initialize_params <- function(X.list, r, gamma, W=NULL, verbose=TRUE){
+initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
     m = length(X.list)
     p = ncol(X.list[[1]])
 
     # initialize W
-    if (is.null(W)){
-        X.list.scale = lapply(X.list, function(X){
+    if (is.null(W)) {
+        X.list.scale = lapply(X.list, function(X) {
             X = scale(X, center = T, scale = T)
             X[is.na(X)] = 0
             X
         })
 
-        if (nrow(do.call(rbind, X.list.scale)) > 10000){
-            nstart = 1 # kmeans runs
+        if (nrow(do.call(rbind, X.list.scale)) > 20000) {
+            nstart = 1  # kmeans runs
+        } else if (nrow(do.call(rbind, X.list.scale)) > 10000) {
+            nstart = 2
         } else {
             nstart = 5
         }
 
         kmeans.out = kmeans(do.call(rbind, X.list.scale), centers = r, nstart = nstart, iter.max = 20)
-        W = t(kmeans.out$centers) # there are negative values in W, this is used to initiate H
+        W = t(kmeans.out$centers)  # there are negative values in W, this is used to initiate H
 
-        # initialize H
-        # nonegative ensured
-        H.list = lapply(1:m, function(j) solve_H(X.list.scale[[j]], W=W, lambd=rep(1, p), b=rep(0, p)))
+        # initialize H nonegative ensured
+        H.list = lapply(1:m, function(j) solve_H(X.list.scale[[j]], W = W, lambd = rep(1, p), b = rep(0, p)))
 
         # update W, nonnegative ensured
         b.list.init = lapply(1:m, function(j) rep(0, p))
         lambda.list.init = lapply(1:m, function(j) rep(1, p))
-        W = solve_W(X.list=X.list, H.list=H.list, lambda.list=lambda.list.init, b.list=b.list.init)
+        W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list.init, b.list = b.list.init)
     } else {
 
         # check nonegative
-        checkmate::assert_true(all(W>=0))
+        checkmate::assert_true(all(W >= 0))
 
-        # initialize H
-        # nonegative ensured
-        H.list = lapply(1:m, function(j) solve_H(X.list[[j]], W=W, lambd=rep(1, p), b=rep(0, p)))
+        # initialize H nonegative ensured
+        H.list = lapply(1:m, function(j) solve_H(X.list[[j]], W = W, lambd = rep(1, p), b = rep(0, p)))
     }
 
     # initialize lambda
     b.list.init = lapply(1:m, function(j) rep(0, p))
-    lambda.list = solve_lambda_list(X.list=X.list, W=W, H.list=H.list, b.list=b.list.init, gamma = gamma)
+    lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list.init, gamma = gamma)
 
     # initialize b
-    b.list = lapply(1:m, function(j) solve_b(X=X.list[[j]],W=W,H=H.list[[j]],lambd=lambda.list[[j]]))
+    b.list = lapply(1:m, function(j) solve_b(X = X.list[[j]], W = W, H = H.list[[j]], lambd = lambda.list[[j]]))
 
-    return(list(W=W, H.list=H.list, lambda.list=lambda.list, b.list=b.list))
+    return(list(W = W, H.list = H.list, lambda.list = lambda.list, b.list = b.list))
 }
 
 #' Solve for factor loading paramters H
@@ -320,22 +321,20 @@ initialize_params <- function(X.list, r, gamma, W=NULL, verbose=TRUE){
 #'
 #' @param X ncells-by-ngenes gene expression matrix
 #' @param W ngenes-by-r non-negative common factor matrix
-#' @param lambd numeric scalar, scaling associated with the dataset
+#' @param lambd nonnegative numeric scalar, scaling associated with the dataset
 #' @param b nonegative scalar, shift associated with tht edataset
 #'
-#' @return H ncells-by-r matrix
-#' @import checkmate lsei
-solve_H <- function(X, W, lambd, b){
+#' @return ncells-by-r matrix, factor loading matrix H
+#' @import checkmate lsei parallel
+solve_H <- function(X, W, lambd, b) {
     # check size X n*p, W p*r, lambda p, b p
-    checkmate::assert_true(all(c(ncol(X), nrow(W), length(lambd))==rep(length(b), 3)))
+    checkmate::assert_true(all(c(ncol(X), nrow(W), length(lambd)) == rep(length(b), 3)))
 
-    A = lambd* W  #p*r
-    H = do.call(rbind,parallel::mclapply(1:nrow(X), function(i)
-        lsei::pnnls(a=A, b=X[i,]-b, sum=1)$x,
-        mc.cores = parallel::detectCores()-4)
-    )
+    A = lambd * W  #p*r
+    H = do.call(rbind, parallel::mclapply(1:nrow(X), function(i) lsei::pnnls(a = A, b = X[i, ] - b,
+                                                                             sum = 1)$x, mc.cores = parallel::detectCores() - 4))
 
-    checkmate::assert_true(any(is.na(H))==F)
+    checkmate::assert_true(any(is.na(H)) == F)
     return(H)
 }
 
@@ -351,32 +350,32 @@ solve_H <- function(X, W, lambd, b){
 #'
 #' @return W ngenes-by-r common factor matrix shared among datasets
 #' @import checkmate lsei
-solve_W <- function(X.list, H.list, lambda.list, b.list){
+solve_W <- function(X.list, H.list, lambda.list, b.list) {
     p = length(lambda.list[[1]])
     m = length(H.list)
     checkmate::assert_true(all(c(length(lambda.list), length(b.list)) == rep(m, 2)))
 
-    nj.list = lapply(X.list, nrow) # avoid repeated calculation
+    nj.list = lapply(X.list, nrow)  # avoid repeated calculation
 
-    W = do.call(rbind, parallel::mclapply(1:p, function(l){
-        A= do.call(rbind, lapply(1:m, function(j)
-            lambda.list[[j]][l] * H.list[[j]] # nj*r
-        ))
-        B = do.call(c, lapply(1:m, function(j){
-            X.list[[j]][,l]-b.list[[j]][l] # nj*1
+    W = do.call(rbind, parallel::mclapply(1:p, function(l) {
+        A = do.call(rbind, lapply(1:m, function(j) lambda.list[[j]][l] * H.list[[j]]  # nj*r
+))
+        B = do.call(c, lapply(1:m, function(j) {
+            X.list[[j]][, l] - b.list[[j]][l]  # nj*1
         }))
 
-        lsei::nnls(a=A, b=B)$x
-    }, mc.cores = parallel::detectCores()-4))
+        lsei::nnls(a = A, b = B)$x
+    }, mc.cores = parallel::detectCores() - 4))
 
-    checkmate::assert_true(any(is.na(W))==F)
+    checkmate::assert_true(any(is.na(W)) == F)
 
     return(W)
 }
 
 #' Solve for dataset specific scalings lambda.list
 #'
-#' \deqn{argmin_{lambda_j>=0} ||X- HW^T diag(lambda_j) - 1_n b^T||_F^2 + gamma * N * sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}
+#' \deqn{argmin_{lambda_j>=0} ||X- HW^T diag(lambda_j) - 1_n b^T||_F^2 +
+#' gamma * N * sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}
 #'
 #' @param X.list A list of ncells-by-ngenes gene expression matrix.
 #' @param H.list A list of factor loading matrix of size ncells-by-r
@@ -386,35 +385,35 @@ solve_W <- function(X.list, H.list, lambda.list, b.list){
 #'
 #' @return lambda.list A list of m scaling vector of size p (ngenes).
 #' @import checkmate lsei
-solve_lambda_list <- function(X.list, W, H.list, b.list, gamma){
+solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
     m = length(nvec)
 
-    if (m>1){
-        lambda.out = parallel::mclapply(1:nrow(W), function(l){
-            Ajl.list = lapply(1:m, function(j){
-                H.list[[j]] %*% W[l,]  # nj * 1
+    if (m > 1) {
+        lambda.out = parallel::mclapply(1:nrow(W), function(l) {
+            Ajl.list = lapply(1:m, function(j) {
+                H.list[[j]] %*% W[l, ]  # nj * 1
             })
-            Bjl.list = lapply(1:m, function(j){
-                X.list[[j]][,l] -b.list[[j]][l]
+            Bjl.list = lapply(1:m, function(j) {
+                X.list[[j]][, l] - b.list[[j]][l]
             })
 
-            Amat <- diag( sapply(Ajl.list, function(Ajl) sum(Ajl^2))) +
-                gamma * matrix(nvec, ncol=1) %*% matrix(nvec, nrow=1) / ntotal
-            Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]]))  + gamma * nvec
+            Amat <- diag(sapply(Ajl.list, function(Ajl) sum(Ajl^2))) +
+                gamma * matrix(nvec, ncol = 1) %*% matrix(nvec, nrow = 1)/ntotal
+            Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]])) + gamma * nvec
 
-            lambd = lsei::nnls(a=Amat, b=Bvec)$x
+            lambd = lsei::nnls(a = Amat, b = Bvec)$x
             lambd[is.na(lambd)] = 0
 
             lambd
-        }, mc.cores=parallel::detectCores()-4)
+        }, mc.cores = parallel::detectCores() - 4)
         lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
-    } else{
+    } else {
         # only one dataset
-        lambda.list = list(rep(1,nrow(W)))
+        lambda.list = list(rep(1, nrow(W)))
     }
-    return (lambda.list)
+    return(lambda.list)
 }
 
 
@@ -428,7 +427,7 @@ solve_lambda_list <- function(X.list, W, H.list, b.list, gamma){
 #' @param lambd numeric scalar, scaling associated with the dataset
 #'
 #' @return b shift vector of size p (ngenes).
-solve_b <- function(X, W, H, lambd){
+solve_b <- function(X, W, H, lambd) {
 
     C = t(lambd * W %*% t(H))
     B = X - C

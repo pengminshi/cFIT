@@ -25,14 +25,13 @@
 #'
 #' @import checkmate
 #' @export
-data_transfer <- function(Xtarget, Wref, max.niter=100, tol=1e-5,
-                          init=NULL, seed=0, verbose=T){
+CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NULL, seed = 0, verbose = T) {
 
 
     checkmate::assert_true(ncol(Xtarget) == nrow(Wref))
 
-    if (!is.null(rownames(Wref)) & !is.null(colnames(Xtarget))){
-        checkmate::assert_true(all(rownames(Wref)==colnames(Xtarget)))
+    if (!is.null(rownames(Wref)) & !is.null(colnames(Xtarget))) {
+        checkmate::assert_true(all(rownames(Wref) == colnames(Xtarget)))
     }
     n = nrow(Xtarget)
 
@@ -41,79 +40,74 @@ data_transfer <- function(Xtarget, Wref, max.niter=100, tol=1e-5,
     has.inf = apply(Xtarget, 2, function(x) any(is.infinite(x)))
     good.genes = which(!(has.na | has.inf))
     Xtarget = Xtarget[, good.genes]
-    Wref = Wref[good.genes,]
+    Wref = Wref[good.genes, ]
     p = nrow(Wref)
 
     set.seed(seed)
     time.start = Sys.time()
 
     # if initial values of params provide
-    if (all( c('lambda', 'b','H') %in% names(init))){
-        params.list = list(H=init$H, b=init$b, lambda=init$lambda)
+    if (all(c("lambda", "b", "H") %in% names(init))) {
+        params.list = list(H = init$H, b = init$b, lambda = init$lambda)
     } else {
         # initialize
-        if(verbose) logmsg('Initialize target H, b, Lambda ...')
-        params.list = list(b = rep(0, p),
-                           lambda = rep(1, p),
-                           H = solve_H(Xtarget, W=Wref, lambd=rep(1, p), b=rep(0, p)))
+        if (verbose)
+            logmsg("Initialize target H, b, Lambda ...")
+        params.list = list(b = rep(0, p), lambda = rep(1, p), H = solve_H(Xtarget, W = Wref, lambd = rep(1, p), b = rep(0, p)))
     }
 
-    obj = transfer_objective_func(X=Xtarget, W=Wref, H=params.list$H,
-                                  lambd=params.list$lambda, b=params.list$b)
+    obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda, b = params.list$b)
     converge = F
 
-    for (iter in 1:max.niter){
+    for (iter in 1:max.niter) {
         obj.old = obj
 
-        params.to.update.list = sample(c('lambda','b','H'), 3, replace = F)
-        if(verbose) logmsg('iter ',iter, ', update by: ', paste(params.to.update.list, collapse = '->'))
+        params.to.update.list = sample(c("lambda", "b", "H"), 3, replace = F)
+        if (verbose)
+            logmsg("iter ", iter, ", update by: ", paste(params.to.update.list, collapse = "->"))
 
-        for (params.to.update in params.to.update.list){
+        for (params.to.update in params.to.update.list) {
 
-            params.list = transfer_solve_subproblem(params.to.update = params.to.update,
-                                                    X=Xtarget, W=Wref, H=params.list$H, b=params.list$b, lambd=params.list$lambda,
-                                                    verbose=verbose)
+            params.list = transfer_solve_subproblem(params.to.update = params.to.update, X = Xtarget, W = Wref,
+                                                    H = params.list$H, b = params.list$b,
+                                                    ambd = params.list$lambda, verbose = verbose)
         }
 
-        obj = transfer_objective_func(X=Xtarget, W=Wref, H=params.list$H,
-                                      lambd=params.list$lambda, b=params.list$b)
+        obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H,
+                                      lambd = params.list$lambda, b = params.list$b)
 
-        delta = abs(obj-obj.old) / mean(c(obj, obj.old))
-        if (verbose) logmsg('iter ',iter, ', objective=', obj, ', delta=diff/obj = ', delta)
+        delta = abs(obj - obj.old)/mean(c(obj, obj.old))
+        if (verbose)
+            logmsg("iter ", iter, ", objective=", obj, ", delta=diff/obj = ", delta)
 
         # check if converge
-        if (delta < tol){
-            logmsg('Converge at iter ', iter,', obj delta = ', delta)
-            converge=T
+        if (delta < tol) {
+            if (verbose)
+                logmsg("Converge at iter ", iter, ", obj delta = ", delta)
+            converge = T
             break
         }
 
     }
-    time.elapsed = difftime(time1=Sys.time(), time2=time.start, units = 'auto')
+    time.elapsed = difftime(time1 = Sys.time(), time2 = time.start, units = "auto")
 
-    if (verbose){
-        logmsg('Finised in ', time.elapsed,' ', units(time.elapsed),'\n',
-               'Convergence status: ', converge,' at ', iter,
-               ' iterations\nFinal objective delta:', delta)
+    if (verbose) {
+        logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\n", "Convergence status: ",
+               converge, " at ", iter, " iterations\nFinal objective delta:", delta)
     }
 
-    if (!is.null(rownames(Xtarget))){
+    if (!is.null(rownames(Xtarget))) {
         rownames(params.list$H) = rownames(Xtarget)
     }
 
-    if (!is.null(colnames(Xtarget))){
+    if (!is.null(colnames(Xtarget))) {
         names(params.list$b) = colnames(Xtarget)
         names(params.list$lambda) = colnames(Xtarget)
     }
 
-    return(list(H = params.list$H,
-                b = params.list$b,
-                lambda = params.list$lambda,
-                convergence = converge,
-                obj = obj,
-                niter=iter,
-                delta=delta,
-                params = list(max.niter=max.niter, tol=tol, Wref= Wref)))
+    return(list(H = params.list$H, b = params.list$b, lambda = params.list$lambda,
+                convergence = converge, obj = obj, niter = iter, delta = delta,
+                params = list(max.niter = max.niter, tol = tol, Wref = Wref)))
 
 }
 
@@ -128,12 +122,12 @@ data_transfer <- function(Xtarget, Wref, max.niter=100, tol=1e-5,
 #' @param b A numeric shift vector of size p (ngenes).
 #'
 #' @return numeric scalar, the value of the objective function
-transfer_objective_func <- function(X, W, H, lambd, b){
+transfer_objective_func <- function(X, W, H, lambd, b) {
     n = nrow(X)
-    tmp = t(X) - lambd * W  %*% t(H) - b  # p by n
-    obj = sum( tmp^2 ) / n
+    tmp = t(X) - lambd * W %*% t(H) - b  # p by n
+    obj = sum(tmp^2)/n
 
-    return (obj)
+    return(obj)
 }
 
 
@@ -148,21 +142,22 @@ transfer_objective_func <- function(X, W, H, lambd, b){
 #' @param W An ngenes-by-r reference low dimensional factor matrix
 #' @param H A factor loading matrix of size ncells-by-r
 #' @param b A numeric shift vector of size p (ngenes).
+#' @param lambda A numeric scaling vector of size p (ngenes)
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return a list containing updated parameters: H, lambda,  b
-transfer_solve_subproblem <- function(params.to.update = c('lambda','b','H'),
-                                      X, W, H, b, verbose=T){
+transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"),
+                                      X, W, H, b, lambd, verbose = T) {
     params.to.update = match.arg(params.to.update)
 
-    if (params.to.update == 'lambda'){
-        lambd = transfer_solve_lambda(X=X, W=W, H=H, b=b)
-    } else if (params.to.update == 'b'){
-        b = solve_b(X=X, W=W, H=H, lambd=lambd)
+    if (params.to.update == "lambda") {
+        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b)
+    } else if (params.to.update == "b") {
+        b = solve_b(X = X, W = W, H = H, lambd = lambd)
     } else {
-        H = solve_H(X=X, W=W, lambd=lambd, b=b)
+        H = solve_H(X = X, W = W, lambd = lambd, b = b)
     }
-    return(list(lambda=lambd, b=b, H=H))
+    return(list(lambda = lambd, b = b, H = H))
 }
 
 
@@ -177,19 +172,19 @@ transfer_solve_subproblem <- function(params.to.update = c('lambda','b','H'),
 #'
 #' @return numeric vector, scaling of target data with respect to the reference factor matrix
 #' @import parallel
-transfer_solve_lambda <- function(X, W, H, b){
+transfer_solve_lambda <- function(X, W, H, b) {
 
     n = nrow(X)
 
     A = H %*% t(W)
     xmean = mean(c(X))
 
-    lambd = do.call(c, parallel::mclapply(1:ncol(X), function(l){
-        a_l = A[,l]
-        b_l = X[,l] - b[l]
+    lambd = do.call(c, parallel::mclapply(1:ncol(X), function(l) {
+        a_l = A[, l]
+        b_l = X[, l] - b[l]
 
-        max(0, (a_l %*% b_l ) / (a_l %*% a_l))
-    }, mc.cores = parallel::detectCores()-4))
+        max(0, (a_l %*% b_l)/(a_l %*% a_l))
+    }, mc.cores = parallel::detectCores() - 4))
 
     return(lambd)
 }

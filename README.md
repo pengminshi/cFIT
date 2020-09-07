@@ -14,10 +14,10 @@ A preprint of the manuscript is available [here](https://www.biorxiv.org/content
   author={Peng, Minshi and Li, Yue and Wamsley, Brie and Wei, Yuting and Roeder, Kathryn},
   journal={bioRxiv},
   year={2020},
-  publisher={Cold Spring Harbor Laboratory}
+  doi={10.1101/276345}
 }
 ```
-The supplemental figure can be found [here](https://github.com/pengminshi/cFIT/blob/master/manuscript/suppl_Single_Cell_Integration_and_Transfer.pdf)
+The supplemental figures can be found [here](https://github.com/pengminshi/cFIT/blob/master/manuscript/suppl_Single_Cell_Integration_and_Transfer.pdf)
 
 ## Installation
 This package can be installed through `devtools` in R:
