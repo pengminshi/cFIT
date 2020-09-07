@@ -133,7 +133,7 @@ p2
 ```
 
 
-```{r, echo=F, fig.show="hold",out.width='60%', fig.cap = 'Integrated pancreas islet cells data sests from five technologies.'}
+```{r, echo=F, fig.show="hold", fig.cap = 'Integrated pancreas islet cells data sests from five technologies.'}
 # ggsave('fig/panc_int_umap_color_tech.png', plot=p1, width=5.5, height=4)
 # ggsave('fig/panc_int_umap_color_celltype.png', plot=p2, width=5.5, height=4)
 
@@ -190,7 +190,7 @@ p2 = plot_umap(labels=celltype, point.size = 0.5, alpha=0.5, legend.name='cell t
 p1+p2
 ```
 
-```{r, echo=F, fig.show="hold",out.width='60%', fig.cap='cFIT transfer results.'}
+```{r, echo=F, fig.show="hold", fig.cap='cFIT transfer results.'}
 # , fig.show="hold",out.width="50%"
 # ggsave('fig/panc_transfer_umap_color_source.png', plot=p1, width=5.5, height=4)
 # ggsave('fig/panc_transfer_umap_color_celltype.png', plot=p2, width=5.5, height=4)
@@ -208,7 +208,7 @@ est.labels = asign_labels(exprs.source=do.call(rbind, int.ref.out$H.list),
 plotContTable(est_label=est.labels, true_label=data.list$labels.list[[4]], ylab='Mapped type')
 ```
 
-```{r, echo=F, out.width='80%', fig.align='center', fig.cap='Confution matrix comparing the mapped cell type with the reference labels'}
+```{r, echo=F,  fig.align='center', fig.cap='Confution matrix comparing the mapped cell type with the reference labels'}
 # ggsave('fig/panc_transfer_confusion_matrix.png', width = 6, height=4)
 knitr::include_graphics('fig/panc_transfer_confusion_matrix.png')
 ```
@@ -242,7 +242,7 @@ p2 = plot_umap(labels=batchs, point.size = 0.5, alpha=0.5, legend.name='batch', 
 p1+p2
 ```
 
-```{r, echo=F, fig.align='center', out.width='100%',fig.cap='Simulated data from assumed model.'}
+```{r, echo=F, fig.align='center', fig.cap='Simulated data from assumed model.'}
 # ggsave('fig/simu_model_raw.png', plot=p1+p2, width = 9, height=4)
 knitr::include_graphics('fig/simu_model_raw.png')
 ```
@@ -263,7 +263,7 @@ p2 = plot_umap(labels=batchs, point.size = 0.5, alpha=0.5, legend.name='batch', 
 p1+p2
 ```
 
-```{r, echo=F, fig.align='center', out.width='100%', fig.cap='Simulated data from assumed model with batch effects corrected applying cFIT.'}
+```{r, echo=F, fig.align='center',  fig.cap='Simulated data from assumed model with batch effects corrected applying cFIT.'}
 # ggsave('fig/simu_model_int_out.png', plot=p1+p2, width = 9, height=4)
 knitr::include_graphics('fig/simu_model_int_out.png')
 ```
