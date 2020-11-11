@@ -31,8 +31,10 @@
 #'
 #' @import checkmate
 #' @export
-CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 1e+06, nrep = 1, init = NULL, verbose = T, seed = 0) {
+CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 1e+06, nrep = 1, init = NULL,
+                          verbose = T, seed = 0, n.cores=parallel::detectCores() - 4) {
 
+    message('Run cFIT with ',n.cores,' cores ...')
     m = length(X.list)
 
     # subset to the shared genes
@@ -78,17 +80,18 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
             # initialize the parameters, W can be supplied or initialized
             if (verbose)
                 logmsg("Initialize W, H, b, Lambda ...")
-            params.list = initialize_params(X.list = X.list, r = r, gamma = gamma, W = init$W, verbose = verbose)
+            params.list = initialize_params(X.list = X.list, r = r, gamma = gamma, W = init$W, verbose = verbose, n.cores=n.cores)
         }
 
         obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
-                             lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma)
+                             lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma, n.cores=n.cores)
         if (verbose)
             logmsg("Objective for initialization = ", obj)
 
         # initialize
         delta = Inf
         converge = F
+
 
         # solve 4 set of parameters iteratively
         for (iter in 1:max.niter) {
@@ -105,12 +108,12 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
                 params.list = solve_subproblem(params.to.update = params.to.update, X.list = X.list,
                                                W = params.list$W, H.list = params.list$H.list,
                                                b.list = params.list$b.list, lambda.list = params.list$lambda.list,
-                  gamma = gamma, verbose = verbose)
+                                               gamma = gamma, verbose = verbose, n.cores=n.cores)
             }
 
             obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
                                  lambda.list = params.list$lambda.list,
-                                 b.list = params.list$b.list, gamma = gamma)
+                                 b.list = params.list$b.list, gamma = gamma, n.cores=n.cores)
 
             # relative difference of objective function
             delta = abs(obj - obj.old)/mean(c(obj, obj.old))
@@ -172,12 +175,15 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
 #' @param gamma numeric scalar, parameter for the penalty term.
 #'
 #' @return numeric scalar, the value of the objective function
-objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
+objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma, n.cores) {
 
     obj.list = lapply(1:length(X.list), function(j) {
-        tmp1 = W %*% t(H.list[[j]])
+        # tmp1 = W %*% t(H.list[[j]])
+        # tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
+        # sum((X.list[[j]] - t(lambda.list[[j]] * tmp1) - tmp2)^2)
+        tmp1 = H.list[[j]] %*% t(W)
         tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
-        sum((X.list[[j]] - t(lambda.list[[j]] * tmp1) - tmp2)^2)
+        sum((X.list[[j]] - tmp1 * rep(lambda.list[[j]], rep.int(nrow(H.list[[j]]), nrow(W))) - tmp2)^2)
     })
 
     nvec = sapply(X.list, nrow)
@@ -207,18 +213,18 @@ objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
 #'
 #' @return a list containing updated parameters: W, H.list, lambda.list,  b.list
 solve_subproblem <- function(params.to.update = c("W", "lambda", "b", "H"), X.list, W, H.list,
-                             b.list, lambda.list, gamma, verbose = T) {
+                             b.list, lambda.list, gamma, verbose = T, n.cores) {
     params.to.update = match.arg(params.to.update)
     m = length(X.list)
 
     if (params.to.update == "W") {
-        W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list, b.list = b.list)
+        W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list, b.list = b.list, n.cores = n.cores)
     } else if (params.to.update == "lambda") {
-        lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list, gamma = gamma)
+        lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list, gamma = gamma, n.cores = n.cores)
     } else if (params.to.update == "b") {
-        b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W = W, H = H.list[[j]], lambd = lambda.list[[j]]))
+        b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W = W, H = H.list[[j]], lambd = lambda.list[[j]], n.cores = n.cores))
     } else {
-        H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]], b = b.list[[j]]))
+        H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]], b = b.list[[j]], n.cores = n.cores))
     }
 
     return(list(W = W, lambda.list = lambda.list, b.list = b.list, H.list = H.list))
@@ -266,7 +272,7 @@ initialize_params_random <- function(X.list, r, seed = 0) {
 #'
 #' @return a list containing initialized parameters: W, H.list, lambda.list,  b.list
 #' @import checkmate
-initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
+initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE, n.cores = parallel::detectCores() - 4) {
     m = length(X.list)
     p = ncol(X.list[[1]])
 
@@ -278,39 +284,37 @@ initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
             X
         })
 
-        if (nrow(do.call(rbind, X.list.scale)) > 20000) {
-            nstart = 1  # kmeans runs
-        } else if (nrow(do.call(rbind, X.list.scale)) > 10000) {
-            nstart = 2
+        if (sum(do.call(c, lapply(X.list.scale, nrow))) > 10000) {
+            nstart = 1
         } else {
-            nstart = 5
+            nstart = 3
         }
 
-        kmeans.out = kmeans(do.call(rbind, X.list.scale), centers = r, nstart = nstart, iter.max = 20)
+        kmeans.out = kmeans(do.call(rbind, X.list.scale), centers = r, nstart = nstart, iter.max = 10)
         W = t(kmeans.out$centers)  # there are negative values in W, this is used to initiate H
 
         # initialize H nonegative ensured
-        H.list = lapply(1:m, function(j) solve_H(X.list.scale[[j]], W = W, lambd = rep(1, p), b = rep(0, p)))
+        H.list = lapply(1:m, function(j) solve_H(X.list.scale[[j]], W = W, lambd = rep(1, p), b = rep(0, p), n.cores=n.cores))
 
         # update W, nonnegative ensured
         b.list.init = lapply(1:m, function(j) rep(0, p))
         lambda.list.init = lapply(1:m, function(j) rep(1, p))
-        W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list.init, b.list = b.list.init)
+        W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list.init, b.list = b.list.init, n.cores=n.cores)
     } else {
 
         # check nonegative
         checkmate::assert_true(all(W >= 0))
 
         # initialize H nonegative ensured
-        H.list = lapply(1:m, function(j) solve_H(X.list[[j]], W = W, lambd = rep(1, p), b = rep(0, p)))
+        H.list = lapply(1:m, function(j) solve_H(X.list[[j]], W = W, lambd = rep(1, p), b = rep(0, p), n.cores=n.cores))
     }
 
     # initialize lambda
     b.list.init = lapply(1:m, function(j) rep(0, p))
-    lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list.init, gamma = gamma)
+    lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list.init, gamma = gamma, n.cores=n.cores)
 
     # initialize b
-    b.list = lapply(1:m, function(j) solve_b(X = X.list[[j]], W = W, H = H.list[[j]], lambd = lambda.list[[j]]))
+    b.list = lapply(1:m, function(j) solve_b(X = X.list[[j]], W = W, H = H.list[[j]], lambd = lambda.list[[j]], n.cores=n.cores))
 
     return(list(W = W, H.list = H.list, lambda.list = lambda.list, b.list = b.list))
 }
@@ -326,13 +330,13 @@ initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
 #'
 #' @return ncells-by-r matrix, factor loading matrix H
 #' @import checkmate lsei parallel
-solve_H <- function(X, W, lambd, b) {
+solve_H <- function(X, W, lambd, b, n.cores) {
     # check size X n*p, W p*r, lambda p, b p
     checkmate::assert_true(all(c(ncol(X), nrow(W), length(lambd)) == rep(length(b), 3)))
 
     A = lambd * W  #p*r
     H = do.call(rbind, parallel::mclapply(1:nrow(X), function(i) lsei::pnnls(a = A, b = X[i, ] - b,
-                                                                             sum = 1)$x, mc.cores = parallel::detectCores() - 4))
+                                                                             sum = 1)$x, mc.cores = n.cores))
 
     checkmate::assert_true(any(is.na(H)) == F)
     return(H)
@@ -350,7 +354,7 @@ solve_H <- function(X, W, lambd, b) {
 #'
 #' @return W ngenes-by-r common factor matrix shared among datasets
 #' @import checkmate lsei
-solve_W <- function(X.list, H.list, lambda.list, b.list) {
+solve_W <- function(X.list, H.list, lambda.list, b.list, n.cores) {
     p = length(lambda.list[[1]])
     m = length(H.list)
     checkmate::assert_true(all(c(length(lambda.list), length(b.list)) == rep(m, 2)))
@@ -365,7 +369,7 @@ solve_W <- function(X.list, H.list, lambda.list, b.list) {
         }))
 
         lsei::nnls(a = A, b = B)$x
-    }, mc.cores = parallel::detectCores() - 4))
+    }, mc.cores = n.cores))
 
     checkmate::assert_true(any(is.na(W)) == F)
 
@@ -385,7 +389,7 @@ solve_W <- function(X.list, H.list, lambda.list, b.list) {
 #'
 #' @return lambda.list A list of m scaling vector of size p (ngenes).
 #' @import checkmate lsei
-solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
+solve_lambda_list <- function(X.list, W, H.list, b.list, gamma, n.cores) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
     m = length(nvec)
@@ -407,7 +411,7 @@ solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
             lambd[is.na(lambd)] = 0
 
             lambd
-        }, mc.cores = parallel::detectCores() - 4)
+        }, mc.cores = n.cores)
         lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
     } else {
         # only one dataset
@@ -427,12 +431,16 @@ solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
 #' @param lambd numeric scalar, scaling associated with the dataset
 #'
 #' @return b shift vector of size p (ngenes).
-solve_b <- function(X, W, H, lambd) {
+solve_b <- function(X, W, H, lambd, n.cores) {
 
-    C = t(lambd * W %*% t(H))
-    B = X - C
+    # C = t(lambd * W %*% t(H))
+    b = do.call(c, parallel::mclapply(1:nrow(W), function(l){
+        max(0, mean(X[,l] - H %*% W[l,] * lambd[l]))
+    }, mc.cores=n.cores))
+    # C = H %*% t(W) * rep(lambd, rep.int(nrow(H), nrow(W))) # n*p*r complexity
+    # B = X - C
+    # b = sapply(colMeans(B), function(x) max(0, x))
 
-    b = sapply(colMeans(B), function(x) max(0, x))
     return(b)
 }
 

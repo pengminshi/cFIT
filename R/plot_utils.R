@@ -31,7 +31,7 @@ gg_color_hue <- function(n) {
 #'  \item{emb} umap embedding matrix
 #' }
 #'
-#' @import ggplot ggthemes uwot
+#' @import ggplot2 ggthemes uwot
 #' @export
 plot_umap <- function(X = NULL, labels = NULL, pca = 50, n_components = 2, n_neighbors = 30,
                       min_dist = 0.1, point.size = 0.3, alpha = 1, title = NULL,

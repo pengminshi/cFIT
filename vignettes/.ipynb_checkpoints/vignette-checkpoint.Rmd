@@ -252,13 +252,13 @@ knitr::include_graphics('fig/simu_model_raw.png')
 By cFIT we get the integrated results
 
 ```{r, eval=F}
-int.out = CFITIntegrate(X.list=data.out$X.list, r=6, verbose=T, tol=5e-5, seed=42) 
-saveRDS(int.out, file='results/simu_model_integration_output.rds') 
+int.out = int.ref.out = CFITIntegrate(X.list=data.out$X.list, r=6, verbose=T, tol=5e-5, seed=42) 
+saveRDS(int.ref.out, file='results/simu_model_integration_output.rds') 
 ```
 
 ```{r, eval=F, fig.width=5, fig.height=4,fig.align='center',fig.show="hold",out.width="50%", fig.cap='Simulated data from assumed model with batch effects corrected applying cFIT.'}
 Hnorm = do.call(rbind, int.out$H.list) %*% diag(colSums(int.out$W))
-umap.out = plot_umap(X=Hnorm, labels=labels, point.size = 0.5, alpha=0.5, legend.name='cell type')
+umap.out = plot_umap(X=Hnorm, labels=labels, point.size = 0.5, alpha=0., legend.name='cell type')
 
 p1 = umap.out$p # colored by technologies
 p2 = plot_umap(labels=batchs, point.size = 0.5, alpha=0.5, legend.name='batch', emb=umap.out$emb)$p # colored by cell types

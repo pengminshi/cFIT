@@ -25,7 +25,8 @@
 #'
 #' @import checkmate
 #' @export
-CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NULL, seed = 0, verbose = T) {
+CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NULL, seed = 0,
+                         verbose = T, n.cores = parallel::detectCores() - 4) {
 
 
     checkmate::assert_true(ncol(Xtarget) == nrow(Wref))
@@ -56,7 +57,7 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
         params.list = list(b = rep(0, p), lambda = rep(1, p), H = solve_H(Xtarget, W = Wref, lambd = rep(1, p), b = rep(0, p)))
     }
 
-    obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda, b = params.list$b)
+    obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda, b = params.list$b, n.cores=n.cores)
     converge = F
 
     for (iter in 1:max.niter) {
@@ -70,11 +71,11 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
 
             params.list = transfer_solve_subproblem(params.to.update = params.to.update, X = Xtarget, W = Wref,
                                                     H = params.list$H, b = params.list$b,
-                                                    ambd = params.list$lambda, verbose = verbose)
+                                                    lambd = params.list$lambda, verbose = verbose, n.cores=n.cores)
         }
 
         obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H,
-                                      lambd = params.list$lambda, b = params.list$b)
+                                      lambd = params.list$lambda, b = params.list$b, n.cores=n.cores)
 
         delta = abs(obj - obj.old)/mean(c(obj, obj.old))
         if (verbose)
@@ -122,7 +123,7 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
 #' @param b A numeric shift vector of size p (ngenes).
 #'
 #' @return numeric scalar, the value of the objective function
-transfer_objective_func <- function(X, W, H, lambd, b) {
+transfer_objective_func <- function(X, W, H, lambd, b, n.cores) {
     n = nrow(X)
     tmp = t(X) - lambd * W %*% t(H) - b  # p by n
     obj = sum(tmp^2)/n
@@ -147,15 +148,15 @@ transfer_objective_func <- function(X, W, H, lambd, b) {
 #'
 #' @return a list containing updated parameters: H, lambda,  b
 transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"),
-                                      X, W, H, b, lambd, verbose = T) {
+                                      X, W, H, b, lambd, verbose = T, n.cores) {
     params.to.update = match.arg(params.to.update)
 
     if (params.to.update == "lambda") {
-        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b)
+        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b, n.cores=n.cores)
     } else if (params.to.update == "b") {
-        b = solve_b(X = X, W = W, H = H, lambd = lambd)
+        b = solve_b(X = X, W = W, H = H, lambd = lambd, n.cores=n.cores)
     } else {
-        H = solve_H(X = X, W = W, lambd = lambd, b = b)
+        H = solve_H(X = X, W = W, lambd = lambd, b = b, n.cores=n.cores)
     }
     return(list(lambda = lambd, b = b, H = H))
 }
@@ -172,7 +173,7 @@ transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"),
 #'
 #' @return numeric vector, scaling of target data with respect to the reference factor matrix
 #' @import parallel
-transfer_solve_lambda <- function(X, W, H, b) {
+transfer_solve_lambda <- function(X, W, H, b, n.cores) {
 
     n = nrow(X)
 
@@ -184,7 +185,7 @@ transfer_solve_lambda <- function(X, W, H, b) {
         b_l = X[, l] - b[l]
 
         max(0, (a_l %*% b_l)/(a_l %*% a_l))
-    }, mc.cores = parallel::detectCores() - 4))
+    }, mc.cores = n.cores))
 
     return(lambd)
 }

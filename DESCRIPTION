@@ -4,7 +4,9 @@ Version: 0.0.0.9000
 Authors@R: 
     person(given = "Minshi",
            family = "Peng",
-           email = "minship@andrew.cmu.edu"
+           role = c("aut", "cre"),
+           email = "minship@andrew.cmu.edu",
+           comment = c(ORCID = "YOUR-ORCID-ID"))
 Description: cFIT (common Factor Space Integration & Transfer) is a tool for data integration and transfer for scRNAseq data. The toolbox is build based on low rank modeling. It provides functions to estimate the model parameters via iterative non-negative matrix factorization (NMF) and then used for synchronized intefration from across-domain assays, or transferring via low-rank matrix from more informative data to allow for precise identification of data of lower quality. The package also provide simulation tools.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
     pick a license
