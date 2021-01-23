@@ -16,6 +16,7 @@
 #' parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provided (default NULL).
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #' @param seed random seed used (default 0)
+#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return a list containing  \describe{
 #'  \item{W} ngenes-by-r numeric matrix, estimated common factor matrix
@@ -61,9 +62,12 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
 
     # save the best results with minimum objective for output
     obj.best = Inf
+    obj.history.best = NULL
     params.list.best = NULL
     niter.best = NULL
     delta.best = NULL
+    delta.history.best = NULL
+    deltaw.history.best = NULL # diff w /w
     converge.best = NULL
     seed.best = NULL
 
@@ -91,12 +95,16 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
         # initialize
         delta = Inf
         converge = F
+        obj.history = obj
+        delta.history = NULL
+        deltaw.history = NULL
 
 
         # solve 4 set of parameters iteratively
         for (iter in 1:max.niter) {
 
             obj.old = obj  # save or calculating the gap
+            w.old = params.list$W
 
             # random permute update order to ensure convergence
             params.to.update.list = sample(c("W", "lambda", "b", "H"), 4, replace = F)
@@ -114,9 +122,13 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
             obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
                                  lambda.list = params.list$lambda.list,
                                  b.list = params.list$b.list, gamma = gamma, n.cores=n.cores)
+            obj.history = c(obj.history, obj)
 
             # relative difference of objective function
             delta = abs(obj - obj.old)/mean(c(obj, obj.old))
+            delta.history = c(delta.history, delta)
+            deltaw.history = c(deltaw.history, norm(w.old-params.list$W)/norm(w.old))
+
             if (verbose)
                 logmsg("iter ", iter, ", objective=", obj, ", delta=diff/obj = ", delta)
 
@@ -131,9 +143,12 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
         if (obj < obj.best) {
             # update to save the best results
             obj.best = obj
+            obj.history.best = obj.history
             params.list.best = params.list
             niter.best = iter
             delta.best = delta
+            delta.history.best = delta.history
+            deltaw.history.best = deltaw.history
             converge.best = converge
             seed.best = seed + rep - 1
         }
@@ -157,9 +172,10 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
     }
 
     return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list,
-                lambda.list = params.list.best$lambda.list, convergence = converge.best, obj = obj.best,
-        niter = niter.best, delta = delta.best, params = list(gamma = gamma, max.niter = max.niter,
-                                                              tol = tol, nrep = nrep)))
+                lambda.list = params.list.best$lambda.list, convergence = converge.best,
+                obj = obj.best, obj.history = obj.history.best, delta = delta.best, delta.history = delta.history.best,
+                deltaw.history.best = deltaw.history.best,
+                niter = niter.best, params = list(gamma = gamma, max.niter = max.niter, tol = tol, nrep = nrep, seed=seed, n.cores=n.cores)))
 }
 
 
@@ -176,11 +192,12 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
 #'
 #' @return numeric scalar, the value of the objective function
 objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma, n.cores) {
-
+    # logmsg('test ----- > str( H.list)', str( H.list))
     obj.list = lapply(1:length(X.list), function(j) {
         # tmp1 = W %*% t(H.list[[j]])
         # tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
         # sum((X.list[[j]] - t(lambda.list[[j]] * tmp1) - tmp2)^2)
+
         tmp1 = H.list[[j]] %*% t(W)
         tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
         sum((X.list[[j]] - tmp1 * rep(lambda.list[[j]], rep.int(nrow(H.list[[j]]), nrow(W))) - tmp2)^2)
@@ -362,8 +379,9 @@ solve_W <- function(X.list, H.list, lambda.list, b.list, n.cores) {
     nj.list = lapply(X.list, nrow)  # avoid repeated calculation
 
     W = do.call(rbind, parallel::mclapply(1:p, function(l) {
-        A = do.call(rbind, lapply(1:m, function(j) lambda.list[[j]][l] * H.list[[j]]  # nj*r
-))
+        A = do.call(rbind, lapply(1:m, function(j)
+            lambda.list[[j]][l] * H.list[[j]]  # nj*r
+                                  ))
         B = do.call(c, lapply(1:m, function(j) {
             X.list[[j]][, l] - b.list[[j]][l]  # nj*1
         }))

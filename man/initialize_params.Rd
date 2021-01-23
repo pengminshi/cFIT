@@ -4,7 +4,14 @@
 \alias{initialize_params}
 \title{Initialize parameters for data integration or transfer}
 \usage{
-initialize_params(X.list, r, gamma, W = NULL, verbose = TRUE)
+initialize_params(
+  X.list,
+  r,
+  gamma,
+  W = NULL,
+  verbose = TRUE,
+  n.cores = parallel::detectCores() - 4
+)
 }
 \arguments{
 \item{X.list}{a list of ncells-by-ngenes gene expression matrix}

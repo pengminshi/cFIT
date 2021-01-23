@@ -4,7 +4,7 @@
 \alias{transfer_solve_lambda}
 \title{Solve for dataset specific scalings lambda for target data}
 \usage{
-transfer_solve_lambda(X, W, H, b)
+transfer_solve_lambda(X, W, H, b, n.cores)
 }
 \arguments{
 \item{X}{An ncells-by-ngenes gene expression matrix}

@@ -1,3 +1,4 @@
+
 ---
 title: "cFIT Tutorial"
 # output:
@@ -13,10 +14,7 @@ output:
     # toc_float: true
 # author: Minshi Peng
 bibliography: bibfile.bib
-vignette: >
-  %\VignetteIndexEntry{vignette}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+
 ---
 
 ```{css, echo=FALSE}
@@ -215,12 +213,12 @@ plotContTable(est_label=est.labels, true_label=data.list$labels.list[[4]], ylab=
 knitr::include_graphics('fig/panc_transfer_confusion_matrix.png')
 ```
 
-# Simulation
+# Simulated data
 
 We provide tools for simulating data sets. The data can be generated either from our proposed model, or from models provided by a widely employed scRNAseq data simulator [Splatter](https://github.com/Oshlack/splatter) package (@zappia2017splatter)
 
 
-## Simulate from assumed model
+## Simulate from model
 
 Here we show an example of simulating 5 datasets (`ntask`), each composed of 2000 samples (`n`), 500 features (`p`), from 8 underlying clusters (`K`). The cluster separation in controled by the parameter `cl.seq`, and the batch distinction is determined by `batch.effect.sig`, and the within cluster variance is controled by `sig`. `alpha` determines the group proportion, where a smaller alpha corresponds to more unbalanced datasets. 
 
@@ -275,11 +273,93 @@ knitr::include_graphics('fig/simu_model_int_out.png')
 More details to add ...
 
 
+# Algorithm speed up
+The computation complexity of cFIT scales linearly with the number of cells. It can accommodate tens of thousands of cells within reasonable run time on a standard PC (depending on the number of genes, `p`, and the number of factors `r`). To speed up the processing of millions of cells, we implemented a fast version of the algorithm employing the idea of random sketching and stochastic proximal point method (SPP). Details can be found in our manuscipts.
 
-# Version Information
+The speed up version is implemented by `CFITIntegrate_sketched` function. The usage is similar to `CFITIntegrate` with two additional parameters: 
 
-```{r sessionInfo}
-sessionInfo()
+* `subsample.prop`: the fraction to be subsampled in each parameter update, in range (0,1]. Default is set to `min(5*10^4/n, 1)`. Smaller value will results in faster computation for each iteration, but too small the value would result in higher estimation error.
+* `weight.list`: a list of vectors of weights for the corresonding samples saved as a list of data matrices `X.list`. If provided, cells will be subsampled based on the relative weights instead of uniformly.
+
+We examine the performance of the speed up with the following experiments:
+```{r, eval=F}
+# compare runing time with increasing sample per batch
+# Note that this experiment will takes hours!
+n.list=c(5000, 10000, 50000)
+subsample.prop.list = c(1, 0.5, 0.1, 0.01)
+
+ntask = 5 # five batches in total
+p = 500 # number of genes
+r = 10 # number of factors
+
+runtime.mat = matrix(NA, length(n.list), length(subsample.prop.list))
+obj.mat = matrix(NA, length(n.list),  length(subsample.prop.list))
+deltaw.mat = matrix(NA, length(n.list),  length(subsample.prop.list))
+info.list = list()
+
+set.seed(42)
+
+for (i in 1:length(n.list)){
+    n = n.list[i]
+    message('Run experiment with n=',n)
+    data.out = generate_data(n=n, p=p, ntask=ntask, K=r, cl.sep=1, sig=2, batch.effect.sig=0.5, alpha=1)
+    
+    for (j in 1:length(subsample.prop.list)){
+        subsample.prop = subsample.prop.list[j]
+        message('subsample.prop=',subsample.prop,'...')
+
+        start.time = Sys.time()
+        int.out = CFITIntegrate_sketched(X.list=data.out$X.list, r=r, verbose=T, subsample.prop=subsample.prop,
+                                         tol=1e-5, seed=42, max.niter=50, n.cores = 4)
+        end.time = Sys.time()
+
+        time = difftime(end.time, start.time,units = 'm')
+        message('Finish, run ', int.out$niter,' iters in time:', time,'.')
+        
+        runtime.mat[i, j] = time 
+        obj.mat[i,j] = int.out$obj
+        deltaw.mat[i,j] = int.out$deltaw
+        info.list = c(info.list,list(list(n = n, subsample.prop=subsample.prop, deltaw.history=int.out$deltaw.history)))
+    }
+}
+saveRDS(list(runtime.mat=runtime.mat, obj.mat=obj.mat, deltaw.mat=deltaw.mat, info.list=info.list,
+             n.list=n.list, subsample.prop.list=subsample.prop.list, p=p, ntask=ntask, r=r), 'results/simu_sketch.rds')
+```
+
+Examine the results, including the run time, the objective functions
+```{r, eval=F}
+out = readRDS('results/simu_sketch.rds')
+runtime.mat=out$runtime.mat
+obj.mat=out$obj.mat
+deltaw.mat=out$deltaw.mat
+info.list=out$info.list
+n.list=out$n.list
+subsample.prop.list = out$subsample.prop.list
+ntask = out$ntask
+
+df = data.frame(runtime = c(runtime.mat), 
+                obj = c(obj.mat),
+                deltaw = c(deltaw.mat),
+                n = ntask * rep(n.list, ncol(runtime.mat)),
+                subsample =  rep(subsample.prop.list, each=nrow(runtime.mat)))
+
+p1 = ggplot(data=df) + geom_point(aes(x=as.character(subsample), y=runtime, color=as.factor(n))) + 
+        geom_line(aes(x=as.character(subsample), y=runtime, group=as.factor(n))) + 
+        labs(x='subsample proportion', y='run time (min)') +
+        scale_y_continuous(trans = "log10")+ 
+        labs(color = "sample size") + theme_light()
+
+p2 = ggplot(data=df) + geom_point(aes(x=as.character(subsample), y=obj, color=as.factor(n))) + 
+        geom_line(aes(x=as.character(subsample), y=obj, group=as.factor(n))) + 
+        labs(x='subsample proportion', y='objective function') +
+        scale_y_continuous(trans = "log10")
+        labs(color = "sample size") + theme_light()
+        
+p1+p2
+```
+
+```{r, echo=F, fig.align='center',  fig.cap='Examine the run time (left) and objective function with sketched cFIT with varying subsampling fractions.'}
+knitr::include_graphics('fig/simu_sketched.png')
 ```
 
 # Reference

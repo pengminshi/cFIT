@@ -4,7 +4,7 @@
 \alias{solve_W}
 \title{Solve for nonnegative common factor matrix W}
 \usage{
-solve_W(X.list, H.list, lambda.list, b.list)
+solve_W(X.list, H.list, lambda.list, b.list, n.cores)
 }
 \arguments{
 \item{X.list}{A list of ncells-by-ngenes gene expression matrix.}

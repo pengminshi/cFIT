@@ -38,14 +38,9 @@ generate_data <- function(n, ntask, K, p, alpha = NULL, sig = 1, cl.sep = 1, bat
     }
 
     # generate W: representing the cluster centerss
-    while (T) {
-        centers.out = generate_centers(K = K, d = p, sig = sig, cl.sep = cl.sep, max.m = 1000)
-        if (centers.out$status) {
-            break
-        }
-        logmsg("Fail to generate centers, repeat again!")
-    }
-    W = t(abs(centers.out$centers)/rowSums(abs(centers.out$centers)) * 100)  # column sum is 100
+    centers.out = generate_centers_uniform(K = K, d = p, cl.sep = cl.sep)
+    # W = t(abs(centers.out$centers)/rowSums(abs(centers.out$centers)) * 100)  # column sum is 100
+    W = t(centers.out$centers)
 
     # generate labels
     label.list = lapply(1:ntask, function(l) {
@@ -95,60 +90,35 @@ generate_data <- function(n, ntask, K, p, alpha = NULL, sig = 1, cl.sep = 1, bat
 
 }
 
-
 #' Generate gaussian centers with fixed minimum separation c
 #'
 #' Generate K centers in d dimenaional space such that min ||mu_i-mu_j|| = c\sqrt(d, sig)
 #'
 #' @param K number of clusters
 #' @param d dimension of space where K centers are generated
-#' @param sig variance of within cluster variance that affects the cluster separation
 #' @param cl.sep cluster separation
-#' @param max.m max number of attemps
 #'
 #' @return A list containing \describe{
 #'  \item{centers} generated K-by-d corresponding to K centers in d-dim space
 #'  \item{status} boolean indicating whether the generationg is successful
 #' }
-generate_centers <- function(K, d, sig, cl.sep, max.m = 1000) {
+generate_centers_uniform <- function(K, d, cl.sep) {
     assertthat::assert_that(K >= 2)
-    diff.size = cl.sep * sqrt(d) * sig
-    # generate the first datapoint
-    l = cl.sep * sig
-    center = rnorm(d, sd = l)
 
-    # generate the random difference direction with fixed diff.size
-    diff = rnorm(d)
-    diff = diff/norm(diff, "2") * diff.size
-    centers = rbind(center, center + diff)
+    val_norm = sapply(runif(K*d), dist_norm,  d, K)
 
-    if (K > 2) {
-        nb_centers = 2
-        m = 0
+    centers = matrix(val_norm * cl.sep, nrow = K)
 
-        while (nb_centers < K & m < max.m) {
-            center.new = rnorm(d, sd = l)
-            # check if it is within minimum distance of selected centers
-            if (all(colSums(t(centers) - center.new)^2 > diff.size^2)) {
-                # add the new center to centers
-                centers = rbind(centers, center.new)
-                nb_centers = nb_centers + 1
-            }
-
-            m = m + 1
-        }
-    }
-
-    if (nrow(centers) < K) {
-        status = 0  # fail
-        logmsg("Fail to generate centers!")
-        centers = NULL
-    } else {
-        status = 1  # success
-    }
-
-    return(list(centers = centers, status = status))
+    return(list(centers = centers, status = T))
 }
+
+
+
+dist_norm <- function(x, d, K){
+    x/gamma(1+1/d)/gamma(K) * gamma(1/d+K)
+}
+
+
 
 
 #' Convert label vector to membership matrix
@@ -171,3 +141,145 @@ label_to_membership <- function(labels, label.names = NULL) {
     return(memb)
 }
 
+
+
+
+
+
+#################################################
+# the expected distance of each point to the closest is
+# prop to l gamma(1+1/d) * gamma(K) / gamma(1/d + K)
+# d /l /gamma(1+1/d)/gamma(K) * gamma(1/d+K) should keep fixed
+#
+# dist_norm <- function(x, d, K){
+#     x/gamma(1+1/d)/gamma(K) * gamma(1/d+K)
+# }
+#
+# l = 1
+#
+# d.list = seq(from=5, to=100, by = 5)
+# K = 5
+#
+# d.dist.res = sapply(d.list, function(d){
+#     mean(sapply(1:nrep, function(rep) {
+#         centers = matrix(runif(K*d) * l, nrow = K)
+#         dmat = as.matrix(dist(centers))
+#         diag(dmat) = Inf
+#         res  = apply(dmat, 1, min)
+#         res  = sapply(res, dist_norm, d, K)
+#         mean(res)
+#     }))
+# })
+# plot(d.list, d.dist.res, pch=16, type='b')
+#
+
+
+# generate_data <- function(n, ntask, K, p, alpha = NULL, sig = 1, cl.sep = 1, batch.effect.sig = 0.1) {
+#
+#     if (is.null(alpha)) {
+#         alpha = rep(10, K)  # nearly 1/K for each cluster
+#     } else {
+#         if (length(alpha) == 1) {
+#             alpha = rep(alpha, K)
+#         }
+#     }
+#
+#     # generate W: representing the cluster centerss
+#     while (T) {
+#         centers.out = generate_centers(K = K, d = p, sig = sig, cl.sep = cl.sep, max.m = 1000)
+#         if (centers.out$status) {
+#             break
+#         }
+#         logmsg("Fail to generate centers, repeat again!")
+#     }
+#     W = t(abs(centers.out$centers)/rowSums(abs(centers.out$centers)) * 100)  # column sum is 100
+#
+#     # generate labels
+#     label.list = lapply(1:ntask, function(l) {
+#         # generate proportions of gaussian mixture
+#         prob = gtools::rdirichlet(1, alpha = alpha)
+#
+#         # generate labels
+#         sample(1:K, size = n, replace = T, prob = prob)
+#     })
+#
+#     # generate Hj
+#     H.list = lapply(1:ntask, function(l) {
+#
+#         # H, binary and row sum is 1
+#         label_to_membership(label.list[[l]], label.names = 1:K)  # n * K
+#     })
+#
+#     # generate lambdaj, mean 1 sd = 0.5, trimed at 0
+#     lambda.list = lapply(1:ntask, function(l) {
+#         lambd = rnorm(p, mean = 1, sd = batch.effect.sig)
+#         lambd[lambd < 0] = 0
+#         return(lambd)
+#     })
+#
+#     # generate bj, mean 0 abs(rnorm (0, sig))
+#     b.list = lapply(1:ntask, function(l) {
+#         abs(rnorm(p, mean = 0, sd = batch.effect.sig))
+#     })
+#
+#     # generate Ej
+#     E.list = lapply(1:ntask, function(l) {
+#         matrix(rnorm(n * p, mean = 0, sd = sig), nrow = n)
+#     })
+#
+#     # generate Ej to get Xj
+#     X.list = lapply(1:ntask, function(l) {
+#         X = H.list[[l]] %*% t(W * lambda.list[[l]]) + matrix(1, nrow = n, ncol = 1) %*% b.list[[l]] + E.list[[l]]
+#         X[X < 0] = 0
+#
+#         colnames(X) = paste0("gene_", 1:ncol(X))
+#         rownames(X) = paste0("cell_", l, 1:nrow(X))
+#         X
+#     })
+#
+#     return(list(X.list = X.list, H.list = H.list, lambda.list = lambda.list,
+#                 b.list = b.list, E.list = E.list, label.list = label.list, W = W))
+#
+# }
+
+
+#
+# generate_centers <- function(K, d, sig, cl.sep, max.m = 1000) {
+#     assertthat::assert_that(K >= 2)
+#     diff.size = cl.sep * sqrt(d) * sig
+#     # generate the first datapoint
+#     l = cl.sep * sig
+#     center = rnorm(d, sd = l)
+#
+#     # generate the random difference direction with fixed diff.size
+#     diff = rnorm(d)
+#     diff = diff/norm(diff, "2") * diff.size
+#     centers = rbind(center, center + diff)
+#
+#     if (K > 2) {
+#         nb_centers = 2
+#         m = 0
+#
+#         while (nb_centers < K & m < max.m) {
+#             center.new = rnorm(d, sd = l)
+#             # check if it is within minimum distance of selected centers
+#             if (all(colSums(t(centers) - center.new)^2 > diff.size^2)) {
+#                 # add the new center to centers
+#                 centers = rbind(centers, center.new)
+#                 nb_centers = nb_centers + 1
+#             }
+#
+#             m = m + 1
+#         }
+#     }
+#
+#     if (nrow(centers) < K) {
+#         status = 0  # fail
+#         logmsg("Fail to generate centers!")
+#         centers = NULL
+#     } else {
+#         status = 1  # success
+#     }
+#
+#     return(list(centers = centers, status = status))
+# }

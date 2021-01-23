@@ -13,7 +13,8 @@ CFITIntegrate(
   nrep = 1,
   init = NULL,
   verbose = T,
-  seed = 0
+  seed = 0,
+  n.cores = parallel::detectCores() - 4
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provide
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
 
 \item{seed}{random seed used (default 0)}
+
+\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 a list containing  \describe{

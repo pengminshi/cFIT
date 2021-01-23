@@ -4,7 +4,7 @@
 \alias{solve_b}
 \title{Solve for dataset specific shift b}
 \usage{
-solve_b(X, W, H, lambd)
+solve_b(X, W, H, lambd, n.cores)
 }
 \arguments{
 \item{X}{ncells-by-ngenes gene expression matrix}

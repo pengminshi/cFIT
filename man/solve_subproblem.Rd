@@ -12,7 +12,8 @@ solve_subproblem(
   b.list,
   lambda.list,
   gamma,
-  verbose = T
+  verbose = T,
+  n.cores
 )
 }
 \arguments{

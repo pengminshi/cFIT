@@ -11,7 +11,8 @@ CFITTransfer(
   tol = 1e-05,
   init = NULL,
   seed = 0,
-  verbose = T
+  verbose = T,
+  n.cores = parallel::detectCores() - 4
 )
 }
 \arguments{

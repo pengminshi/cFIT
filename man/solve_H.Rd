@@ -4,7 +4,7 @@
 \alias{solve_H}
 \title{Solve for factor loading paramters H}
 \usage{
-solve_H(X, W, lambd, b)
+solve_H(X, W, lambd, b, n.cores)
 }
 \arguments{
 \item{X}{ncells-by-ngenes gene expression matrix}

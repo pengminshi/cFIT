@@ -4,7 +4,7 @@
 \alias{objective_func}
 \title{Calculate the objective function}
 \usage{
-objective_func(X.list, W, lambda.list, H.list, b.list, gamma)
+objective_func(X.list, W, lambda.list, H.list, b.list, gamma, n.cores)
 }
 \arguments{
 \item{X.list}{a list of ncells-by-ngenes gene expression matrix}

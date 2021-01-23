@@ -4,7 +4,7 @@
 \alias{solve_lambda_list}
 \title{Solve for dataset specific scalings lambda.list}
 \usage{
-solve_lambda_list(X.list, W, H.list, b.list, gamma)
+solve_lambda_list(X.list, W, H.list, b.list, gamma, n.cores)
 }
 \arguments{
 \item{X.list}{A list of ncells-by-ngenes gene expression matrix.}

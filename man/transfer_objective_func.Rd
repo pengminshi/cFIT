@@ -4,7 +4,7 @@
 \alias{transfer_objective_func}
 \title{Calculate the objective function}
 \usage{
-transfer_objective_func(X, W, H, lambd, b)
+transfer_objective_func(X, W, H, lambd, b, n.cores)
 }
 \arguments{
 \item{X}{An ncells-by-ngenes gene expression matrix}
