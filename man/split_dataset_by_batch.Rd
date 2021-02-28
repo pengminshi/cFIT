@@ -25,9 +25,9 @@ split_dataset_by_batch(
 }
 \value{
 a list containing  \describe{
-\item{X.list} a list of gene expression matrix per batch
-\item{labels.list}  a list of vectors, saving the cell labels per batch
-\item{metadata.list} a list of dataframe saving the metadata per batch
+\item{X.list}{a list of gene expression matrix per batch}
+\item{labels.list}{a list of vectors, saving the cell labels per batch}
+\item{metadata.list}{a list of dataframe saving the metadata per batch}
 }
 }
 \description{

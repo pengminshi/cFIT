@@ -11,8 +11,8 @@ transfer_solve_subproblem(
   H,
   b,
   lambd,
-  verbose = T,
-  n.cores
+  n.cores,
+  verbose = T
 )
 }
 \arguments{

@@ -28,8 +28,8 @@ preprocess_for_transfer(
 }
 \value{
 A list containing \describe{
-\item{exprs} ncell-by-ngenes preprocessed expresssion matrix
-\item{Wref} ngenes-by-r reference factor matrix, with genes filtered
+\item{exprs}{ncell-by-ngenes preprocessed expresssion matrix}
+\item{Wref}{ngenes-by-r reference factor matrix, with genes filtered}
 }
 }
 \description{

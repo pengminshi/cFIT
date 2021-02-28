@@ -40,10 +40,10 @@ calculate_alignment(
 }
 \value{
 A list containing \describe{
-\item{alignment.per.sample} a numeric vector, alignment score per cell
-\item{alignment.per.cluster} a numeric vector, alignment score per cluster. Only calculated
+\item{alignment.per.sample}{a numeric vector, alignment score per cell}
+\item{alignment.per.cluster}{a numeric vector, alignment score per cluster. Only calculated}
 with labels are provided
-\item{alignment.per.dataset} a numeric vector, alignment score per dataset.
+\item{alignment.per.dataset}{a numeric vector, alignment score per dataset.}
 }
 }
 \description{

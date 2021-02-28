@@ -2,17 +2,17 @@
 % Please edit documentation in R/data_preprocessing_utils.R
 \name{select_genes}
 \alias{select_genes}
-\title{Select shared highly variabel genes}
+\title{Select highly variabel genes shared among datasets}
 \usage{
 select_genes(X.list, ngenes = 3000, subset = NULL, verbose = F)
 }
 \arguments{
-\item{X.list}{a list of m ncells-by-ngenes gene expression matrices from m data sets}
+\item{X.list}{a list of m cells-by-genes gene expression matrices from m data sets}
 
 \item{ngenes}{integer, number of highly variable genes to select}
 
 \item{verbose}{boolean scalar, whether to show Seurat gene selection messages (default FALSE)}
 }
 \description{
-Select shared highly variabel genes
+wrapper for Seurat gene selection functions \code{FindVariableFeatures} and \code{SelectIntegrationFeatures}.
 }

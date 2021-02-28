@@ -15,10 +15,10 @@ generate_centers_uniform(K, d, cl.sep)
 }
 \value{
 A list containing \describe{
-\item{centers} generated K-by-d corresponding to K centers in d-dim space
-\item{status} boolean indicating whether the generationg is successful
+\item{centers}{generated K-by-d corresponding to K centers in d-dim space}
+\item{status}{boolean indicating whether the generationg is successful}
 }
 }
 \description{
-Generate K centers in d dimenaional space such that min ||mu_i-mu_j|| = c\sqrt(d, sig)
+Generate K centers in d dimenaional space such that min ||mu_i-mu_j|| = c(d * sig)^{1/2]}
 }

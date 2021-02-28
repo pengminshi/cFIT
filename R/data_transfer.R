@@ -13,29 +13,28 @@
 #' @param seed random seed used (default 0)
 #'
 #' @return a list containing  \describe{
-#'  \item{H} estimated factor loading matrix of size ncells-by-r
-#'  \item{b}  estimated shift vector of size p (ngenes)
-#'  \item{lambda} estimated scaling vector of size p (ngenes)
-#'  \item{convergence} boolean, whether the algorithm converge
-#'  \item{obj} numeric scalar, value of the objective function at convergence or when maximum iteration achieved
-#'  \item{niter} integer, the iteration at convergence (or maximum iteration if not converge)
-#'  \item{delta} numeric scalar, the relative difference in last objective update
-#'  \item{params} list of parameters used for the algorithm: max.iter, tol, nrep
+#'  \item{H}{estimated factor loading matrix of size ncells-by-r}
+#'  \item{b}{estimated shift vector of size p (ngenes)}
+#'  \item{lambda}{estimated scaling vector of size p (ngenes)}
+#'  \item{convergence}{boolean, whether the algorithm converge}
+#'  \item{obj}{numeric scalar, value of the objective function at convergence or when maximum iteration achieved}
+#'  \item{niter}{integer, the iteration at convergence (or maximum iteration if not converge)}
+#'  \item{delta}{numeric scalar, the relative difference in last objective update}
+#'  \item{params}{list of parameters used for the algorithm: max.iter, tol, nrep}
 #' }
 #'
-#' @import checkmate
+#' @import checkmate parallel
 #' @export
-CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NULL, seed = 0,
-                         verbose = T, n.cores = parallel::detectCores() - 4) {
-
-
+CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NULL, 
+    seed = 0, verbose = T, n.cores = parallel::detectCores() - 4) {
+    
     checkmate::assert_true(ncol(Xtarget) == nrow(Wref))
-
+    
     if (!is.null(rownames(Wref)) & !is.null(colnames(Xtarget))) {
         checkmate::assert_true(all(rownames(Wref) == colnames(Xtarget)))
     }
     n = nrow(Xtarget)
-
+    
     # remove the genes that has na/inf/nan
     has.na = apply(Xtarget, 2, function(x) any(is.na(x)))
     has.inf = apply(Xtarget, 2, function(x) any(is.infinite(x)))
@@ -43,73 +42,76 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
     Xtarget = Xtarget[, good.genes]
     Wref = Wref[good.genes, ]
     p = nrow(Wref)
-
+    
     set.seed(seed)
     time.start = Sys.time()
-
+    
     # if initial values of params provide
     if (all(c("lambda", "b", "H") %in% names(init))) {
         params.list = list(H = init$H, b = init$b, lambda = init$lambda)
     } else {
         # initialize
-        if (verbose)
+        if (verbose) 
             logmsg("Initialize target H, b, Lambda ...")
-        params.list = list(b = rep(0, p), lambda = rep(1, p), H = solve_H(Xtarget, W = Wref, lambd = rep(1, p), b = rep(0, p)))
+        params.list = list(b = rep(0, p), lambda = rep(1, p), H = solve_H(Xtarget, 
+            W = Wref, lambd = rep(1, p), b = rep(0, p), n.cores = n.cores))
     }
-
-    obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda, b = params.list$b, n.cores=n.cores)
+    
+    obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda, 
+        b = params.list$b, n.cores = n.cores)
     converge = F
-
+    
     for (iter in 1:max.niter) {
         obj.old = obj
-
+        
         params.to.update.list = sample(c("lambda", "b", "H"), 3, replace = F)
-        if (verbose)
+        if (verbose) 
             logmsg("iter ", iter, ", update by: ", paste(params.to.update.list, collapse = "->"))
-
+        
         for (params.to.update in params.to.update.list) {
-
-            params.list = transfer_solve_subproblem(params.to.update = params.to.update, X = Xtarget, W = Wref,
-                                                    H = params.list$H, b = params.list$b,
-                                                    lambd = params.list$lambda, verbose = verbose, n.cores=n.cores)
+            
+            params.list = transfer_solve_subproblem(params.to.update = params.to.update, 
+                X = Xtarget, W = Wref, H = params.list$H, b = params.list$b, lambd = params.list$lambda, 
+                verbose = verbose, n.cores = n.cores)
         }
-
-        obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H,
-                                      lambd = params.list$lambda, b = params.list$b, n.cores=n.cores)
-
+        
+        
+        obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda, 
+            b = params.list$b, n.cores = n.cores)
+        
         delta = abs(obj - obj.old)/mean(c(obj, obj.old))
-        if (verbose)
+        if (verbose) 
             logmsg("iter ", iter, ", objective=", obj, ", delta=diff/obj = ", delta)
-
+        
         # check if converge
         if (delta < tol) {
-            if (verbose)
+            if (verbose) 
                 logmsg("Converge at iter ", iter, ", obj delta = ", delta)
             converge = T
             break
         }
-
+        
     }
     time.elapsed = difftime(time1 = Sys.time(), time2 = time.start, units = "auto")
-
+    
     if (verbose) {
-        logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\n", "Convergence status: ",
-               converge, " at ", iter, " iterations\nFinal objective delta:", delta)
+        logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\n", "Convergence status: ", 
+            converge, " at ", iter, " iterations\nFinal objective delta:", delta)
     }
-
+    
     if (!is.null(rownames(Xtarget))) {
         rownames(params.list$H) = rownames(Xtarget)
     }
-
+    
     if (!is.null(colnames(Xtarget))) {
         names(params.list$b) = colnames(Xtarget)
         names(params.list$lambda) = colnames(Xtarget)
     }
-
-    return(list(H = params.list$H, b = params.list$b, lambda = params.list$lambda,
-                convergence = converge, obj = obj, niter = iter, delta = delta,
-                params = list(max.niter = max.niter, tol = tol, Wref = Wref)))
-
+    
+    return(list(H = params.list$H, b = params.list$b, lambda = params.list$lambda, 
+        convergence = converge, obj = obj, niter = iter, delta = delta, params = list(max.niter = max.niter, 
+            tol = tol, Wref = Wref)))
+    
 }
 
 #' Calculate the objective function
@@ -123,11 +125,12 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
 #' @param b A numeric shift vector of size p (ngenes).
 #'
 #' @return numeric scalar, the value of the objective function
+#' @export
 transfer_objective_func <- function(X, W, H, lambd, b, n.cores) {
     n = nrow(X)
     tmp = t(X) - lambd * W %*% t(H) - b  # p by n
     obj = sum(tmp^2)/n
-
+    
     return(obj)
 }
 
@@ -147,16 +150,17 @@ transfer_objective_func <- function(X, W, H, lambd, b, n.cores) {
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return a list containing updated parameters: H, lambda,  b
-transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"),
-                                      X, W, H, b, lambd, verbose = T, n.cores) {
+#' @export
+transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"), X, 
+    W, H, b, lambd, n.cores, verbose = T) {
     params.to.update = match.arg(params.to.update)
-
+    
     if (params.to.update == "lambda") {
-        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b, n.cores=n.cores)
+        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b, n.cores = n.cores)
     } else if (params.to.update == "b") {
-        b = solve_b(X = X, W = W, H = H, lambd = lambd, n.cores=n.cores)
+        b = solve_b(X = X, W = W, H = H, lambd = lambd, n.cores = n.cores)
     } else {
-        H = solve_H(X = X, W = W, lambd = lambd, b = b, n.cores=n.cores)
+        H = solve_H(X = X, W = W, lambd = lambd, b = b, n.cores = n.cores)
     }
     return(list(lambda = lambd, b = b, H = H))
 }
@@ -173,20 +177,23 @@ transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"),
 #'
 #' @return numeric vector, scaling of target data with respect to the reference factor matrix
 #' @import parallel
+#' @export
 transfer_solve_lambda <- function(X, W, H, b, n.cores) {
-
+    
     n = nrow(X)
-
+    
     A = H %*% t(W)
     xmean = mean(c(X))
-
+    
     lambd = do.call(c, parallel::mclapply(1:ncol(X), function(l) {
         a_l = A[, l]
         b_l = X[, l] - b[l]
-
-        max(0, (a_l %*% b_l)/(a_l %*% a_l))
+        
+        x = max(0, (a_l %*% b_l)/(a_l %*% a_l))
+        x[is.na(x)] = 0
+        x
     }, mc.cores = n.cores))
-
+    
     return(lambd)
 }
 

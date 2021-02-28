@@ -43,15 +43,15 @@ parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provide
 }
 \value{
 a list containing  \describe{
-\item{W} ngenes-by-r numeric matrix, estimated common factor matrix
-\item{H.list} A list of m factor loading matrix of size ncells-by-r, estimated factor loading matrices
-\item{b.list}  A list of estimated shift vector of size p (ngenes).
-\item{lambda.list} A list of estimated scaling vector of size p (ngenes).
-\item{convergence} boolean, whether the algorithm converge
-\item{obj} numeric scalar, value of the objective function at convergence or when maximum iteration achieved
-\item{niter} integer, the iteration at convergence (or maximum iteration if not converge)
-\item{delta} numeric scalar, the relative difference in last objective update
-\item{params} list of parameters used for the algorithm: gamma, max.iter, tol, nrep
+\item{W}{ngenes-by-r numeric matrix, estimated common factor matrix}
+\item{H.list}{A list of m factor loading matrix of size ncells-by-r, estimated factor loading matrices}
+\item{b.list}{A list of estimated shift vector of size p (ngenes).}
+\item{lambda.list}{A list of estimated scaling vector of size p (ngenes).}
+\item{convergence}{boolean, whether the algorithm converge}
+\item{obj}{numeric scalar, value of the objective function at convergence or when maximum iteration achieved}
+\item{niter}{integer, the iteration at convergence (or maximum iteration if not converge)}
+\item{delta}{numeric scalar, the relative difference in last objective update}
+\item{params}{list of parameters used for the algorithm: gamma, max.iter, tol, nrep}
 }
 }
 \description{

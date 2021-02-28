@@ -15,6 +15,5 @@ match_human_expr_to_mouse_genes(human.exprs, mouse.genes.list)
 ncell-by-ngene' of mapped mouse expression matrix
 }
 \description{
-Match the expression of human genes to expression of mouse genes.
-If the case of multi-match, the expressions are averaged
+Match the expression of human genes to expression of mouse genes. If the case of multi-match, the expressions are averaged
 }

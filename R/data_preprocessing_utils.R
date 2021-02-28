@@ -7,9 +7,9 @@
 #' @param dataset.name string, prefix of list name
 #'
 #' @return a list containing  \describe{
-#'  \item{X.list} a list of gene expression matrix per batch
-#'  \item{labels.list}  a list of vectors, saving the cell labels per batch
-#'  \item{metadata.list} a list of dataframe saving the metadata per batch
+#'  \item{X.list}{a list of gene expression matrix per batch}
+#'  \item{labels.list}{a list of vectors, saving the cell labels per batch}
+#'  \item{metadata.list}{a list of dataframe saving the metadata per batch}
 #' }
 #'
 #' @import checkmate
@@ -55,9 +55,11 @@ split_dataset_by_batch <- function(X, batch, labels = NULL, metadata = NULL, dat
 
 
 
-#' Select shared highly variabel genes
+#' Select highly variabel genes shared among datasets
 #'
-#' @param X.list a list of m ncells-by-ngenes gene expression matrices from m data sets
+#' wrapper for Seurat gene selection functions \code{FindVariableFeatures} and \code{SelectIntegrationFeatures}.
+#'
+#' @param X.list a list of m cells-by-genes gene expression matrices from m data sets
 #' @param ngenes integer, number of highly variable genes to select
 #' @param verbose boolean scalar, whether to show Seurat gene selection messages (default FALSE)
 #'
@@ -68,10 +70,12 @@ select_genes <- function(X.list, ngenes = 3000, subset = NULL, verbose = F) {
     obj.list = lapply(1:m, function(j) {
         obj = Seurat::CreateSeuratObject(counts = t(X.list[[j]]))
         obj = Seurat::NormalizeData(obj, verbose = verbose)
-        obj = Seurat::FindVariableFeatures(obj, selection.method = "vst", nfeatures = ngenes, verbose = verbose)
+        obj = Seurat::FindVariableFeatures(obj, selection.method = "vst", nfeatures = ngenes,
+            verbose = verbose)
         obj
     })
-    selected.genes = Seurat::SelectIntegrationFeatures(object.list = obj.list, nfeatures = ngenes, verbose = TRUE)
+    selected.genes = Seurat::SelectIntegrationFeatures(object.list = obj.list, nfeatures = ngenes,
+        verbose = TRUE)
     return(selected.genes)
 }
 
@@ -89,9 +93,10 @@ select_genes <- function(X.list, ngenes = 3000, subset = NULL, verbose = F) {
 #'
 #' @return preprocessed expression list X.list
 #'
-#' @import Seurat
+#' @importFrom Seurat ScaleData
 #' @export
-preprocess_for_integration <- function(X.list, genes, scale.factor = 10^4, scale = T, center = F) {
+preprocess_for_integration <- function(X.list, genes, scale.factor = 10000, scale = T,
+    center = F, verbose = F) {
     m = length(X.list)
     datasets = names(X.list)
     for (i in 1:m) {
@@ -100,12 +105,9 @@ preprocess_for_integration <- function(X.list, genes, scale.factor = 10^4, scale
 
     X.list = lapply(1:m, function(j) {
         x = X.list[[j]][, genes]
-
-        obj <- Seurat::CreateSeuratObject(counts = t(x), meta.data = data.frame(Cell = rownames(x), row.names = rownames(x)))
-
-        obj <- Seurat::NormalizeData(obj, normalization.method = "LogNormalize", scale.factor = scale.factor, verbose = F)
-        obj <- Seurat::ScaleData(obj, do.center = center, do.scale = scale, verbose = F)
-        t(obj@assays$RNA@scale.data)
+        x = log(x/rowSums(x) * scale.factor + 1)
+        x = t(Seurat::ScaleData(t(x), do.center = center, do.scale = scale, verbose = verbose))
+        x
     })
     names(X.list) = datasets
 
@@ -125,28 +127,23 @@ preprocess_for_integration <- function(X.list, genes, scale.factor = 10^4, scale
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return A list containing \describe{
-#'  \item{exprs} ncell-by-ngenes preprocessed expresssion matrix
-#'  \item{Wref} ngenes-by-r reference factor matrix, with genes filtered
+#'  \item{exprs}{ncell-by-ngenes preprocessed expresssion matrix}
+#'  \item{Wref}{ngenes-by-r reference factor matrix, with genes filtered}
 #' }
 #'
-#' @import Seurat
+#' @importFrom Seurat ScaleData
 #' @export
-preprocess_for_transfer <- function(counts, Wref, scale.factor = 10000, scale = T, center = F, verbose = F) {
+preprocess_for_transfer <- function(counts, Wref, scale.factor = 10000, scale = T,
+    center = F, verbose = F) {
     genes = intersect(rownames(Wref), colnames(counts))
 
     if (verbose)
         logmsg("Transfer on ", nrow(counts), ", ", length(genes), " genes ...")
 
     Wref = Wref[genes, ]
-
-    obj <- Seurat::CreateSeuratObject(counts = t(counts[, genes]),
-                                      meta.data = data.frame(Cell = rownames(counts[, genes]),
-                                                             row.names = rownames(counts[, genes])))
-    obj <- Seurat::NormalizeData(obj, normalization.method = "LogNormalize",
-                                 scale.factor = scale.factor, verbose = F)
-    obj <- Seurat::ScaleData(obj, do.center = center, do.scale = scale,
-                             verbose = F)
-    exprs = t(obj@assays$RNA@scale.data)
+    exprs = counts[, genes]
+    exprs = log(exprs/rowSums(exprs) * scale.factor + 1)
+    exprs = t(Seurat::ScaleData(t(exprs), do.center = center, do.scale = scale, verbose = verbose))
 
     return(list(exprs = exprs, Wref = Wref))
 }
@@ -154,8 +151,7 @@ preprocess_for_transfer <- function(counts, Wref, scale.factor = 10000, scale = 
 
 #' Match the human gene expressions to the mouse gene expressions
 #'
-#' Match the expression of human genes to expression of mouse genes.
-#' If the case of multi-match, the expressions are averaged
+#' Match the expression of human genes to expression of mouse genes. If the case of multi-match, the expressions are averaged
 #'
 #' @param human.expres ncell-by-ngene expression matrix of human
 #' @param mouse.genes.list a character vector of mouse gene symbols, indicating which genes are to match
@@ -206,20 +202,22 @@ match_human_expr_to_mouse_genes <- function(human.exprs, mouse.genes.list) {
 #'
 #' @param gene.list a character vector of mouse gene symbols, indicating which mouse genes are to match
 #' @return a list of vectors, corresponding to the mapped human genes for each mouse gene
-#'
-#' @import biomaRt
+#' @export
 mouse_gene_to_human_genes <- function(gene.list) {
 
-    require("biomaRt")
+    if (!require("biomaRt", quietly = TRUE)) {
+        message("install biomaRt package ...")
+        BiocManager::install("biomaRt")
+        require(biomaRt, quietly = TRUE)
+    }
+
     human = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
     mouse = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
 
-    gene.map = getLDS(attributes = c("mgi_symbol"), filters = "mgi_symbol",
-                      values = gene.list, mart = mouse, attributesL = c("hgnc_symbol"),
-                      martL = human, uniqueRows = T)
+    gene.map = getLDS(attributes = c("mgi_symbol"), filters = "mgi_symbol", values = gene.list,
+        mart = mouse, attributesL = c("hgnc_symbol"), martL = human, uniqueRows = T)
 
-    tmp = aggregate(as.character(gene.map[, 2]), by = list(gene.map[, 1]),
-                    FUN = function(x) list(as.character(x)))
+    tmp = aggregate(as.character(gene.map[, 2]), by = list(gene.map[, 1]), FUN = function(x) list(as.character(x)))
 
     map.list = tmp$x
     names(map.list) = tmp$Group.1
@@ -273,19 +271,22 @@ match_mouse_expr_to_human_genes <- function(mouse.exprs, human.genes.list) {
 #'
 #' @param gene.list a character vector of human gene symbols, indicating which human genes are to match
 #' @return a list of vectors, corresponding to the mapped mouse genes for each human gene
-#'
-#' @import biomaRt
+#' @export
 human_gene_to_mouse_genes <- function(gene.list) {
-    require("biomaRt")
+
+    if (!require("biomaRt", quietly = TRUE)) {
+        message("install biomaRt package ...")
+        BiocManager::install("biomaRt")
+        require("biomaRt")
+    }
+
     human = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
     mouse = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
 
-    gene.map = getLDS(attributes = c("hgnc_symbol"), filters = "hgnc_symbol",
-                      values = gene.list, mart = human, attributesL = c("mgi_symbol"),
-                      martL = mouse, uniqueRows = T)
+    gene.map = getLDS(attributes = c("hgnc_symbol"), filters = "hgnc_symbol", values = gene.list,
+        mart = human, attributesL = c("mgi_symbol"), martL = mouse, uniqueRows = T)
 
-    tmp = aggregate(as.character(gene.map[, 2]), by = list(gene.map[, 1]),
-                    FUN = function(x) list(as.character(x)))
+    tmp = aggregate(as.character(gene.map[, 2]), by = list(gene.map[, 1]), FUN = function(x) list(as.character(x)))
 
     map.list = tmp$x
     names(map.list) = tmp$Group.1

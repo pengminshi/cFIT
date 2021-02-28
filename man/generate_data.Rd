@@ -35,13 +35,13 @@ representing equal cluster size. smaller alpha corresponds to more unbalanced ty
 }
 \value{
 A list of generated data, \describe{
-\item{X.list} a list of n-by-p expression matrix
-\item{H.list} a list of n-by-K binary membership matrix
-\item{lambda.list} a list of length-p vectors of per-dataset scaling
-\item{b.list} a list of length-p vectors of per-dataset shift
-\item{E.list} a list of noise matrix
-\item{label.list} a list of length-n vectors of cluster labels
-\item{W} p-by-K common factor matrix
+\item{X.list}{a list of n-by-p expression matrix}
+\item{H.list}{a list of n-by-K binary membership matrix}
+\item{lambda.list}{a list of length-p vectors of per-dataset scaling}
+\item{b.list}{a list of length-p vectors of per-dataset shift}
+\item{E.list}{a list of noise matrix}
+\item{label.list}{a list of length-n vectors of cluster labels}
+\item{W}{p-by-K common factor matrix}
 }
 }
 \description{

@@ -7,9 +7,10 @@
 preprocess_for_integration(
   X.list,
   genes,
-  scale.factor = 10^4,
+  scale.factor = 10000,
   scale = T,
-  center = F
+  center = F,
+  verbose = F
 )
 }
 \arguments{

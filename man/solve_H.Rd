@@ -14,6 +14,8 @@ solve_H(X, W, lambd, b, n.cores)
 \item{lambd}{nonnegative numeric scalar, scaling associated with the dataset}
 
 \item{b}{nonegative scalar, shift associated with tht edataset}
+
+\item{n.cores}{number of cores used for the process}
 }
 \value{
 ncells-by-r matrix, factor loading matrix H
