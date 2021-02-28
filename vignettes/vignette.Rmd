@@ -91,7 +91,7 @@ Perform data integration with `CFITIntegrate`. The only parameter to adjust is `
 
 ```{r, eval=T}
 # takes roughly 20 minutes to run
-int.out = CFITIntegrate(X.list=exprs.list, r=15, verbose=F, max.niter = 100, seed=0)
+int.out = CFITIntegrate(X.list=exprs.list, r=15, seed=0, verbose=F)
 saveRDS(int.out, file='results/panc5_integration_output.rds')
 ```
 

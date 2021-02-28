@@ -27,4 +27,4 @@ devtools::install_github("pengminshi/cFIT")
 ```
 
 ## Examples
-Please follow the [vignette](https://htmlpreview.github.io/?https://github.com/pengminshi/cFIT/blob/master/doc/vignette.html) for examples of using this R package on simulated and real data sets.
+Please follow the [vignette](https://htmlpreview.github.io/?https://github.com/pengminshi/cFIT/blob/master/vignettes/vignette.html) for examples of using this R package on simulated and real data sets.
