@@ -4,16 +4,16 @@
 \alias{ari}
 \title{Adjusted Rand Index}
 \usage{
-ari(labels.ref, labels.est)
+ari(x, y)
 }
 \arguments{
-\item{labels.ref}{Reference label vector}
+\item{x}{a vector containing the labels of the first classification. Must be a vector of characters, integers, numerics, or a factor, but not a list.}
 
-\item{labels.est}{Estimated label vector}
+\item{y}{a vector containing the labels of the second classification.}
 }
 \value{
-calculated ARI
+a scalar with the adjusted rand index.
 }
 \description{
-Adjusted Rand Index
+A function to compute the adjusted rand index between two classifications.
 }

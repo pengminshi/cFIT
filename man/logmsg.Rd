@@ -7,9 +7,9 @@
 logmsg(..., level = "info")
 }
 \arguments{
-\item{level}{log streshold}
+\item{...}{log messages}
 
-\item{l...}{log messages}
+\item{level}{log streshold}
 }
 \description{
 Log message

@@ -31,9 +31,11 @@ split_dataset_by_batch <- function(X, batch, labels = NULL, metadata = NULL, dat
     for (i in 1:nbatch) {
         ind = which(batch == batch.unique[i])
         X.list[[i]] = X[ind, ]
-        labels.list[[i]] = as.character(labels[ind])
-        if (!is.null(rownames(X.list[[i]]))) {
-            names(labels.list[[i]]) = rownames(X.list[[i]])
+        if (!is.null(labels)){
+            labels.list[[i]] = as.character(labels[ind])
+            if (!is.null(rownames(X.list[[i]]))) {
+                names(labels.list[[i]]) = rownames(X.list[[i]])
+            }
         }
 
         if (!is.null(metadata)) {
@@ -65,7 +67,7 @@ split_dataset_by_batch <- function(X, batch, labels = NULL, metadata = NULL, dat
 #'
 #' @import Seurat
 #' @export
-select_genes <- function(X.list, ngenes = 3000, subset = NULL, verbose = F) {
+select_genes <- function(X.list, ngenes = 3000, verbose = F) {
     m = length(X.list)
     obj.list = lapply(1:m, function(j) {
         obj = Seurat::CreateSeuratObject(counts = t(X.list[[j]]))
@@ -90,6 +92,7 @@ select_genes <- function(X.list, ngenes = 3000, subset = NULL, verbose = F) {
 #' @param scale.factor scalar, scaling factor for library size normalization (default 1e4)
 #' @param scale boolean, whether to scale per gene expression (default TRUE)
 #' @param center boolean, whether to center per gene expression (default FALSE)
+#' @param verbose boolean, whether to show messages
 #'
 #' @return preprocessed expression list X.list
 #'
@@ -153,7 +156,7 @@ preprocess_for_transfer <- function(counts, Wref, scale.factor = 10000, scale = 
 #'
 #' Match the expression of human genes to expression of mouse genes. If the case of multi-match, the expressions are averaged
 #'
-#' @param human.expres ncell-by-ngene expression matrix of human
+#' @param human.exprs ncell-by-ngene expression matrix of human
 #' @param mouse.genes.list a character vector of mouse gene symbols, indicating which genes are to match
 #'
 #' @return ncell-by-ngene' of mapped mouse expression matrix
@@ -229,7 +232,7 @@ mouse_gene_to_human_genes <- function(gene.list) {
 #' Match the expression of mouse genes to expression of human genes.
 #' If the case of multi-match, the expressions are averaged
 #'
-#' @param mouse.expres ncell-by-ngene expression matrix of mouse
+#' @param mouse.exprs ncell-by-ngene expression matrix of mouse
 #' @param human.genes.list a character vector of human gene symbols, indicating which genes are to match
 #'
 #' @return ncell-by-ngene' of mapped human expression matrix

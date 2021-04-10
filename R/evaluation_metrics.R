@@ -22,12 +22,12 @@
 #'
 #' @importFrom FNN get.knn
 #' @export
-calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.dataset = 100, 
+calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.dataset = 100,
     dataset = NULL, labels = NULL, max.k = 50, seed = 0, verbose = F, pca = F) {
     set.seed(seed)
-    
+
     m = length(X.list)
-    
+
     if (m == 1 & is.null(dataset)) {
         stop("Error: please provide more than one dataset!")
     } else if (m == 1) {
@@ -35,21 +35,21 @@ calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.d
         X.list = lapply(unique.ds, function(d) X.list[[1]][dataset == d, ])
         m = length(X.list)
     }
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Calculate alignment of ", m, " datasets ...")
-    
+
     if (is.null(dataset)) {
         dataset = as.character(do.call(c, lapply(1:m, function(j) rep(j, nrow(X.list[[j]])))))
     } else {
         dataset = as.character(dataset)
     }
-    
+
     if (balanced) {
         min.sample.per.dataset = max(min(sapply(X.list, nrow)), min.sample.per.dataset)
-        if (verbose) 
+        if (verbose)
             logmsg("Subsample tp ", min.sample.per.dataset, " points per dataset ...")
-        
+
         tmp = 0
         ind.list = c()
         for (j in 1:m) {
@@ -57,7 +57,7 @@ calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.d
             ind = sample(1:nj, min.sample.per.dataset, replace = F)
             X.list[[j]] = X.list[[j]][ind, ]
             ind.list = c(ind.list, tmp + ind)
-            
+
             tmp = tmp + nj
         }
         dataset = dataset[ind.list]
@@ -65,38 +65,38 @@ calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.d
             labels = labels[ind.list]
         }
     }
-    
+
     n = sum(sapply(X.list, nrow))
     X = do.call(rbind, X.list)
     if (pca) {
         X = prcomp(X, rank = max(pca, 10))$x
     }
-    
+
     if (is.null(k)) {
         k = min(max.k, max(10, floor(0.01 * n)))
     }
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Find k nearest neighbor with k = ", k, "...")
     knn.out = FNN::get.knn(X, k = k)
-    
-    
+
+
     unique.ds = unique(dataset)
     dataset.ratio = sapply(unique.ds, function(ds) mean(dataset == ds))  # replace 1/m
     names(dataset.ratio) = unique.ds
-    
-    
+
+
     # n = nrow(knn.out$nn.index)
-    if (verbose) 
+    if (verbose)
         logmsg("Calculate alignment score")
     alignment.per.sample = sapply(1:n, function(i) {
         nb_same = sum(dataset[knn.out$nn.index[i, ]] == dataset[i])
         ratio = dataset.ratio[dataset[i]]
         1 - (nb_same/k - ratio)/(1 - ratio)  # normalization
     })
-    
+
     if (!is.null(labels)) {
-        if (verbose) 
+        if (verbose)
             logmsg("Aggregate alignment score per cluster ...")
         agg.out = aggregate(alignment.per.sample, by = list(labels = labels), FUN = mean)
         alignment.per.cluster = agg.out$x
@@ -104,14 +104,14 @@ calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.d
     } else {
         alignment.per.cluster = NULL
     }
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Aggregate alignment score per dataset ...")
     agg.out = aggregate(alignment.per.sample, by = list(dataset = dataset), FUN = mean)
     alignment.per.dataset = agg.out$x
     names(alignment.per.dataset) = agg.out$dataset
-    
-    return(list(alignment.per.sample = alignment.per.sample, alignment.per.cluster = alignment.per.cluster, 
+
+    return(list(alignment.per.sample = alignment.per.sample, alignment.per.cluster = alignment.per.cluster,
         alignment.per.dataset = alignment.per.dataset))
 }
 
@@ -140,61 +140,61 @@ calculate_alignment <- function(X.list, k = NULL, balanced = F, min.sample.per.d
 #'
 #' @importFrom FNN get.knn
 #' @export
-calculate_alignment_per_type <- function(X, dataset = NULL, labels = NULL, k = NULL, 
+calculate_alignment_per_type <- function(X, dataset = NULL, labels = NULL, k = NULL,
     max.k = 50, seed = 0, verbose = F, pca = F) {
-    
+
     set.seed(seed)
     n = nrow(X)
-    
+
     if (pca) {
         X = prcomp(X, rank = max(pca, 10))$x
     }
-    
+
     if (is.null(k)) {
         k = min(max.k, max(10, floor(0.01 * n)))
     }
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Find k nearest neighbor with k = ", k, "...")
     knn.out = FNN::get.knn(X, k = k)
-    
+
     # n = nrow(knn.out$nn.index)
-    if (verbose) 
+    if (verbose)
         logmsg("Calculate alignment score")
     alignment.per.sample = sapply(1:n, function(i) {
         nb.neighbor.in.same.label = sum(labels[knn.out$nn.index[i, ]] == labels[i])
         if (nb.neighbor.in.same.label > 0) {
-            nb_same = sum(labels[knn.out$nn.index[i, ]] == labels[i] & dataset[knn.out$nn.index[i, 
+            nb_same = sum(labels[knn.out$nn.index[i, ]] == labels[i] & dataset[knn.out$nn.index[i,
                 ]] == dataset[i])
-            ratio = mean(dataset == dataset[i] & labels == labels[i])/mean(labels == 
+            ratio = mean(dataset == dataset[i] & labels == labels[i])/mean(labels ==
                 labels[i])  # proportion of dataset conditioned on label
             return(1 - (nb_same/nb.neighbor.in.same.label - ratio)/(1 - ratio))  # # normalization
         } else {
             return(NA)
         }
     })
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Aggregate alignment score per cluster ...")
-    agg.out = aggregate(alignment.per.sample, by = list(labels = labels), FUN = mean, 
+    agg.out = aggregate(alignment.per.sample, by = list(labels = labels), FUN = mean,
         na.rm = T)
     alignment.per.cluster = agg.out$x
     names(alignment.per.cluster) = agg.out$labels
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Aggregate alignment score per dataset ...")
-    agg.out = aggregate(alignment.per.sample, by = list(dataset = dataset), FUN = mean, 
+    agg.out = aggregate(alignment.per.sample, by = list(dataset = dataset), FUN = mean,
         na.rm = T)
     alignment.per.dataset = agg.out$x
     names(alignment.per.dataset) = agg.out$dataset
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Aggregate alignment per cluster per dataset")
-    alignment.per.dataset.cluster = aggregate(alignment.per.sample, by = list(dataset = dataset, 
+    alignment.per.dataset.cluster = aggregate(alignment.per.sample, by = list(dataset = dataset,
         labels = labels), FUN = mean, na.rm = T)
-    
-    
-    return(list(alignment.per.sample = alignment.per.sample, alignment.per.cluster = alignment.per.cluster, 
+
+
+    return(list(alignment.per.sample = alignment.per.sample, alignment.per.cluster = alignment.per.cluster,
         alignment.per.dataset = alignment.per.dataset, alignment.per.dataset.cluster = alignment.per.dataset.cluster))
 }
 
@@ -207,7 +207,7 @@ calculate_alignment_per_type <- function(X, dataset = NULL, labels = NULL, k = N
 #' @param exprs.source ncells-by-ngenes expression matrix of source data
 #' @param exprs.target ncells-by-ngenes expression matrix of target data
 #' @param labels.source a vector of labels for source cells
-#' @param labels.source a vector of labels for target cells
+#' @param labels.target a vector of labels for target cells
 #' @param k integer, number of nearest neighor (by default \code{min(max.k,
 #' max(10, floor(0.01* (n.source + n.target))))} is used)
 #' @param max.k upper bound of k (default 50)
@@ -215,55 +215,55 @@ calculate_alignment_per_type <- function(X, dataset = NULL, labels = NULL, k = N
 #'
 #' @importFrom FNN get.knn
 #' @export
-get_cluster_match <- function(exprs.source, exprs.target, labels.source, labels.target, 
+get_cluster_match <- function(exprs.source, exprs.target, labels.source, labels.target,
     k = NULL, max.k = 50, verbose = F) {
-    
+
     X.list = list(exprs.source, exprs.target)
     n.source = nrow(exprs.source)
     n.target = nrow(exprs.target)
-    
+
     dataset = c(rep("source", n.source), rep("target", n.target))
-    
+
     if (is.null(k)) {
         k = min(max.k, max(10, floor(0.01 * (n.source + n.target))))
     }
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Find k nearest neighbor with k = ", k, "...")
     knn.out = FNN::get.knn(do.call(rbind, X.list), k = k)
-    
+
     target.knn.index = knn.out$nn.index[-(1:n.source), ]
     target.knn.index[target.knn.index > n.source] = NA  # only consider index from source
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Calculate major neighbor type per target sample...")
     matched.type = unlist(lapply(1:nrow(target.knn.index), function(i) {
         ind = target.knn.index[i, ]
-        if (all(is.na(ind))) 
+        if (all(is.na(ind)))
             return(NA)
         return(getmode(labels.source[ind[!is.na(ind)]]))  # matched major source label for each target sample
     }))
-    
-    
-    if (verbose) 
+
+
+    if (verbose)
         logmsg("Calculate the neighbor composition of each class...")
     unique.labels.target = unique(labels.target)
     source.class.size = table(labels.source)
     matched.type.per.label = lapply(unique.labels.target, function(label) {
         ind = which(labels.target == label)
         tab = table(matched.type[ind])
-        
+
         # tab = tab / source.class.size[names(tab)] # rewight by the inverse of class
         # size
         tab = sort(tab, decreasing = T)
-        
+
         if (length(tab) > 0) {
             tab = tab/length(ind)  #sum(tab) # calculate the proportion
         }
         list(n = length(ind), matched.type = tab)
     })
     names(matched.type.per.label) = unique.labels.target
-    
+
     # return(list(target.knn.index=target.knn.index, matched.type=matched.type,
     # unique.labels.target=unique.labels.target, labels.target=labels.target))
     return(matched.type.per.label)
@@ -283,31 +283,31 @@ get_cluster_match <- function(exprs.source, exprs.target, labels.source, labels.
 #'
 #' @importFrom FNN get.knn
 #' @export
-asign_labels <- function(exprs.source, exprs.target, labels.source, k = NULL, max.k = 50, 
+asign_labels <- function(exprs.source, exprs.target, labels.source, k = NULL, max.k = 50,
     verbose = F) {
-    
+
     X.list = list(exprs.source, exprs.target)
     n.source = nrow(exprs.source)
     n.target = nrow(exprs.target)
-    
+
     dataset = c(rep("source", n.source), rep("target", n.target))
-    
+
     if (is.null(k)) {
         k = min(max.k, max(10, floor(0.01 * (n.source + n.target))))
     }
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Find k nearest neighbor with k = ", k, "...")
     knn.out = FNN::get.knn(do.call(rbind, X.list), k = k)
-    
+
     target.knn.index = knn.out$nn.index[-(1:n.source), ]
     target.knn.index[target.knn.index > n.source] = NA  # only consider index from source
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Calculate major neighbor type per target sample...")
     matched.type = unlist(lapply(1:nrow(target.knn.index), function(i) {
         ind = target.knn.index[i, ]
-        if (all(is.na(ind))) 
+        if (all(is.na(ind)))
             return(NA)
         return(getmode(labels.source[ind[!is.na(ind)]]))  # matched major source label for each target sample
     }))
@@ -315,18 +315,35 @@ asign_labels <- function(exprs.source, exprs.target, labels.source, k = NULL, ma
 }
 
 
-
 #' Adjusted Rand Index
 #'
-#' @param labels.ref Reference label vector
-#' @param labels.est Estimated label vector
+#' A function to compute the adjusted rand index between two classifications.
 #'
-#' @return calculated ARI
-#'
-#' @importFrom  mclust adjustedRandIndex
+#' @param x a vector containing the labels of the first classification. Must be a vector of characters, integers, numerics, or a factor, but not a list.
+#' @param y a vector containing the labels of the second classification.
+#' @return a scalar with the adjusted rand index.
 #' @export
-ari <- function(labels.ref, labels.est) {
-    mclust::adjustedRandIndex(labels.ref, labels.est)
+ari <- function(x, y) {
+    x <- as.vector(x)
+    y <- as.vector(y)
+
+    if (length(x) != length(y))
+        stop("arguments must be vectors of the same length")
+
+    tab <- table(x, y)
+
+    if (all(dim(tab) == c(1, 1)))
+        return(1)
+
+    a <- sum(choose(tab, 2))
+    b <- sum(choose(rowSums(tab), 2)) - a
+    c <- sum(choose(colSums(tab), 2)) - a
+    d <- choose(sum(tab), 2) - a - b - c
+
+    ARI <- (a - (a + b) * (a + c)/(a + b + c + d))/((a + b + a + c)/2 - (a + b) *
+                                                        (a + c)/(a + b + c + d))
+
+    return(ARI)
 }
 
 #' Get the the mode in a categorical vector
@@ -356,14 +373,15 @@ getmode <- function(x) {
 #' @return the plot (ggplot object)
 #'
 #' @import ggplot2
+#' @importFrom reshape2 melt
 #' @export
-plotContTable <- function(est_label, true_label, short.names = NULL, y.ord = NULL, 
+plotContTable <- function(est_label, true_label, short.names = NULL, y.ord = NULL,
     x.ord = NULL, xlab = "Reference", ylab = "", threshold = NULL) {
-    
+
     if (is.null(short.names)) {
         short.names = levels(factor(true_label))
     }
-    
+
     cont.table <- table(true_label, est_label)
     if (!is.null(y.ord)) {
         if (length(y.ord) != ncol(cont.table)) {
@@ -381,30 +399,30 @@ plotContTable <- function(est_label, true_label, short.names = NULL, y.ord = NUL
         }
     }
     K <- ncol(cont.table)
-    
+
     if (!is.null(threshold)) {
         cont.table[cont.table <= threshold] = 0
     }
-    
+
     sub.clusters <- paste0("", colnames(cont.table))
-    
+
     cont.table <- apply(as.matrix(cont.table), 2, as.integer)
     cont.table <- data.frame(cont.table)
     cont.table$Reference = factor(short.names, levels = short.names)
     colnames(cont.table) <- c(sub.clusters, "Reference")
-    
+
     dat3 <- reshape2::melt(cont.table, id.var = "Reference")
     grid.labels = as.character(dat3$value)
     grid.labels[grid.labels == "0"] = ""
-    
-    
-    g <- ggplot2::ggplot(dat3, aes(Reference, variable)) + geom_tile(aes(fill = value)) + 
-        geom_text(aes(label = grid.labels), size = 4.5) + scale_fill_gradient(low = "white", 
-        high = "lightsteelblue") + labs(y = ylab, x = xlab) + theme(panel.background = element_blank(), 
-        axis.line = element_blank(), axis.text.x = element_text(size = 10, angle = 90, 
-            hjust = 1, vjust = 0.5), axis.text.y = element_text(size = 10), axis.ticks = element_blank(), 
-        axis.title.x = element_text(size = 12), axis.title.y = element_text(size = 12), 
+
+
+    g <- ggplot2::ggplot(dat3, aes(Reference, variable)) + geom_tile(aes(fill = value)) +
+        geom_text(aes(label = grid.labels), size = 4.5) + scale_fill_gradient(low = "white",
+        high = "lightsteelblue") + labs(y = ylab, x = xlab) + theme(panel.background = element_blank(),
+        axis.line = element_blank(), axis.text.x = element_text(size = 10, angle = 90,
+            hjust = 1, vjust = 0.5), axis.text.y = element_text(size = 10), axis.ticks = element_blank(),
+        axis.title.x = element_text(size = 12), axis.title.y = element_text(size = 12),
         legend.position = "none")
-    
+
     return(g)
 }

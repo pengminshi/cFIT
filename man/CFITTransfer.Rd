@@ -30,7 +30,7 @@ CFITTransfer(
 
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
 
-\item{nrep}{integer, number of repeated runs (to reduce effect of local optimum, default 1)}
+\item{n.cores}{number of cores used for parallel computing}
 }
 \value{
 a list containing  \describe{

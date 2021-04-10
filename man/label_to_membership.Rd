@@ -9,7 +9,7 @@ label_to_membership(labels, label.names = NULL)
 \arguments{
 \item{labels}{a vector of labels from K distint classes}
 
-\item{labels.names}{(optional) alternative label names, used for naming columns of membership matrix}
+\item{label.names}{(optional) alternative label names, used for naming columns of membership matrix}
 }
 \value{
 an n-by-K binary membership matrix

@@ -33,6 +33,8 @@ specifying which set of parameters to update}
 \item{gamma}{numeric scalar, parameter for the penalty term.}
 
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
+
+\item{n.cores}{integer number of cores used for parallel computing}
 }
 \value{
 a list containing updated parameters: W, H.list, lambda.list,  b.list

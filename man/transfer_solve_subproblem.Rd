@@ -27,6 +27,8 @@ specifying which set of parameters to update}
 
 \item{b}{A numeric shift vector of size p (ngenes).}
 
+\item{n.cores}{integer, number of cores used for parallel computation}
+
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
 
 \item{lambda}{A numeric scaling vector of size p (ngenes)}

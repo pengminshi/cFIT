@@ -29,6 +29,8 @@ solve_lambda_list_penalized(
 \item{lambda.list.old}{lambda.list from last iteration}
 
 \item{iter}{current iteration, for calculating the step size.}
+
+\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 lambda.list A list of m scaling vector of size p (ngenes).

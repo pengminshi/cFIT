@@ -1,18 +1,15 @@
 
 ---
 title: "cFIT Tutorial"
-# output:
-#   rmarkdown::html_vignette:
-#     toc: true
-#     toc_depth: 2
-#     # toc_float: true
-#     number_sections: true
 output:
-  BiocStyle::html_document:
-    # css: custom.css
-    # number_sections: no
-    # toc_float: true
-# author: Minshi Peng
+    BiocStyle::html_document:
+    number_sections: no
+    toc_depth: 2
+    toc_float: true
+vignette: >
+    %\VignetteIndexEntry{MRtree Tutorial}
+    %\VignetteEngine{knitr::rmarkdown}
+    %\VignetteEncoding{UTF-8}  
 bibliography: bibfile.bib
 
 ---
@@ -91,7 +88,7 @@ Perform data integration with `CFITIntegrate`. The only parameter to adjust is `
 
 ```{r, eval=T}
 # takes roughly 20 minutes to run
-int.out = CFITIntegrate(X.list=exprs.list, r=15, seed=0, verbose=F)
+int.out = CFITIntegrate(X.list=exprs.list, r=15, max.niter = 100, seed=42, verbose=F)
 saveRDS(int.out, file='results/panc5_integration_output.rds')
 ```
 
@@ -144,7 +141,7 @@ We first integrate data sets from four technologies (inDrop, celseq, celseq2, Sm
 ```{r, eval=T}
 # perform integration to estimate Wref with data sets from 4 technologies
 # run time 20 min
-int.ref.out = CFITIntegrate(X.list=exprs.list[c(1,2,3,5)], r=15, max.niter=100, seed=0, verbose=F)
+int.ref.out = CFITIntegrate(X.list=exprs.list[c(1,2,3,5)], r=15, max.niter = 100, seed=42, verbose=F)
 saveRDS(int.ref.out, file='results/panc_ref_integration_output.rds')
 ```
 
@@ -152,7 +149,7 @@ The learned common factor matrix, saved in `int.ref.out` is then transfer to the
 
 ```{r, eval=T}
 # transfer: run time 10 seconds
-tf.out = CFITTransfer(Xtarget=exprs.list[[4]], Wref=int.ref.out$W, max.niter=100, seed=0, verbose=F)
+tf.out = CFITTransfer(Xtarget=exprs.list[[4]], Wref=int.ref.out$W, max.niter = 100, seed=42, verbose=F)
 ```
 
 Visualize the transferred results via UMAP plot,
@@ -216,7 +213,7 @@ p2
 By cFIT we get the integrated results
 
 ```{r, eval=T}
-int.out = CFITIntegrate(X.list=data.out$X.list, r=6, max.niter = 100, verbose=F, seed=0) 
+int.out = CFITIntegrate(X.list=data.out$X.list, r=6, max.niter = 100, seed=42, verbose=F) 
 saveRDS(int.out, file='results/simu_model_integration_output.rds') 
 ```
 

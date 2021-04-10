@@ -23,6 +23,8 @@ preprocess_for_integration(
 \item{scale}{boolean, whether to scale per gene expression (default TRUE)}
 
 \item{center}{boolean, whether to center per gene expression (default FALSE)}
+
+\item{verbose}{boolean, whether to show messages}
 }
 \value{
 preprocessed expression list X.list

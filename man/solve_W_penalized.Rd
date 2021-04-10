@@ -16,6 +16,10 @@ solve_W_penalized(X.list, H.list, lambda.list, b.list, W.old, iter, n.cores)
 \item{b.list}{A list of shift vector of size p (ngenes).}
 
 \item{W.old}{W from last iteration.}
+
+\item{iter}{current iteration, for calculating the step size.}
+
+\item{n.cores}{integer number of cores used for parallel computing}
 }
 \value{
 W ngenes-by-r common factor matrix shared among datasets

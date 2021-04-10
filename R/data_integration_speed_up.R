@@ -38,15 +38,15 @@
 #'  \item{params}{list of parameters used for the algorithm: gamma, max.iter, tol, nrep, subsample.prop, weight.list, n.cores.}
 #' }
 #'
-#' @import checkmate
+#' @import checkmate parallel
 #' @export
-CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04, 
-    gamma = 1e+06, nrep = 1, init = NULL, subsample.prop = NULL, weight.list = NULL, 
+CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
+    gamma = 1e+06, nrep = 1, init = NULL, subsample.prop = NULL, weight.list = NULL,
     verbose = T, seed = 0, n.cores = parallel::detectCores() - 4) {
-    
+
     message("Run cFIT with ", n.cores, " cores ...")
     m = length(X.list)
-    
+
     # subset to the shared genes
     genes = colnames(X.list[[1]])
     for (j in 1:m) {
@@ -55,31 +55,31 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
         }
         genes = genes[genes %in% colnames(X.list[[j]])]
     }
-    
+
     if (length(genes) < max(10, m)) {
         warning("Too few genes (", length(genes), "), check the data source")
     }
-    
+
     p = length(genes)
     X.list = lapply(X.list, function(x) x[, genes])
-    
-    if (verbose) 
+
+    if (verbose)
         logmsg("Integrate ", m, " datasets (", p, " genes)")
-    
+
     # total number of samples
     ntotal = sum(sapply(1:m, function(j) nrow(X.list[[j]])))
-    
+
     # proportion to be subsampled for updates
     if (is.null(subsample.prop)) {
         subsample.prop = min(5 * 10^4/ntotal, 1)
         logmsg("Use subsample proportion ", subsample.prop)
     }
-    
+
     # check the validity of weights
     if (!is.null(weight.list)) {
         checkmate::assert_true(length(weight.list) == length(X.list))
     }
-    
+
     # save the best results with minimum objective for output
     obj.best = Inf
     obj.history.best = NULL
@@ -88,83 +88,83 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
     niter.best = NULL
     converge.best = NULL
     seed.best = NULL
-    
-    
+
+
     # run each repeat
     time.start = Sys.time()
     for (rep in 1:nrep) {
         set.seed(seed + rep - 1)  # set random seed
-        
+
         # parameters known from previous iterations
         if (all(c("W", "lambda.list", "b.list", "H.list") %in% names(init))) {
-            params.list = list(W = init$W, H.list = init$H.list, b.list = init$b.list, 
+            params.list = list(W = init$W, H.list = init$H.list, b.list = init$b.list,
                 lambda.list = init$lambda.list)
         } else {
             # initialize the parameters, W can be supplied or initialized
-            if (verbose) 
+            if (verbose)
                 logmsg("Initialize W, H, b, Lambda ...")
-            
+
             if (!is.null(weight.list)) {
                 X.list.sub = subsample(X.list, subsample.prop, weight.list = weight.list)
             } else {
                 X.list.sub = subsample(X.list, subsample.prop)
             }
-            
-            params.list = initialize_params(X.list = X.list.sub, r = r, gamma = gamma, 
+
+            params.list = initialize_params(X.list = X.list.sub, r = r, gamma = gamma,
                 W = init$W, verbose = verbose, n.cores = n.cores)
             # params.list = initialize_params_random(X.list = X.list, r = r) # random
             # initialization
         }
-        
-        obj = objective_func(X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list, 
-            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma, 
+
+        obj = objective_func(X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list,
+            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma,
             n.cores = n.cores)
-        if (verbose) 
+        if (verbose)
             logmsg("Objective for initialization = ", obj)
-        
+
         # initialize
         converge = F
         obj.history = obj
         deltaw.history = NULL
-        
+
         # solve 4 set of parameters iteratively
         for (iter in 1:max.niter) {
-            
+
             w.old = params.list$W
             params.list.last = params.list
-            
+
             if (!is.null(weight.list)) {
                 X.list.sub = subsample(X.list, subsample.prop, weight.list = weight.list)
             } else {
                 X.list.sub = subsample(X.list, subsample.prop)
             }
-            
+
             # estimate the membership matrix first random permute update order for the other
             # three sets of parameters
             params.to.update.list = c("H", sample(c("W", "lambda", "b"), replace = F))
-            if (verbose) 
-                logmsg("iter ", iter, ", update by: ", paste(params.to.update.list, 
+            if (verbose)
+                logmsg("iter ", iter, ", update by: ", paste(params.to.update.list,
                   collapse = "->"))
-            
+
             for (params.to.update in params.to.update.list) {
                 # logmsg('test ----- > str(param.list)', str(params.list))
-                params.list = solve_subproblem_penalized(params.to.update = params.to.update, 
-                  X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list, 
-                  b.list = params.list$b.list, lambda.list = params.list$lambda.list, 
-                  gamma = gamma, iter = iter, params.list.last = params.list.last, 
+                params.list = solve_subproblem_penalized(params.to.update = params.to.update,
+                  X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list,
+                  b.list = params.list$b.list, lambda.list = params.list$lambda.list,
+                  gamma = gamma, iter = iter, params.list.last = params.list.last,
                   verbose = verbose, n.cores = n.cores)
             }
             # logmsg('test----> str(params.list)', str(params.list))
-            obj = objective_func(X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list, 
-                lambda.list = params.list$lambda.list, b.list = params.list$b.list, 
+            obj = objective_func(X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list,
+                lambda.list = params.list$lambda.list, b.list = params.list$b.list,
                 gamma = gamma, n.cores = n.cores)
             obj.history = c(obj.history, obj)
             # relative difference of objective function
             deltaw = norm(params.list$W - w.old)/norm(w.old)
             deltaw.history = c(deltaw.history, deltaw)
-            if (verbose) 
+            if (verbose)
                 logmsg("iter ", iter, ", objective=", obj, ", delta_w=", deltaw)
-            
+
             # check if converge
             if (deltaw < tol) {
                 logmsg("Converge at iter ", iter, ", deltaw = ", deltaw)
@@ -172,12 +172,12 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
                 break
             }
         }
-        
+
         logmsg("Estimate the H for all samples")
-        params.list = solve_subproblem(params.to.update = "H", X.list = X.list, W = params.list$W, 
-            H.list = params.list$H.list, b.list = params.list$b.list, lambda.list = params.list$lambda.list, 
+        params.list = solve_subproblem(params.to.update = "H", X.list = X.list, W = params.list$W,
+            H.list = params.list$H.list, b.list = params.list$b.list, lambda.list = params.list$lambda.list,
             gamma = gamma, verbose = verbose, n.cores = n.cores)
-        
+
         if (!is.null(rownames(X.list[[1]]))) {
             params.list$H.list = lapply(1:m, function(j) {
                 H = params.list$H.list[[j]]
@@ -186,12 +186,12 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
             })
             rownames(params.list$W) = colnames(X.list[[1]])
         }
-        
+
         logmsg("Objective using all samples")
-        obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list, 
-            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma, 
+        obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
+            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma,
             n.cores = n.cores)
-        
+
         if (obj < obj.best) {
             # update to save the best results
             obj.best = obj
@@ -204,19 +204,19 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
             seed.best = seed + rep - 1
         }
     }
-    
+
     time.elapsed = difftime(time1 = Sys.time(), time2 = time.start, units = "min")
     if (verbose) {
-        logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\nBest result with seed ", 
-            seed.best, ":\nConvergence status: ", converge.best, " at ", niter.best, 
+        logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\nBest result with seed ",
+            seed.best, ":\nConvergence status: ", converge.best, " at ", niter.best,
             " iterations\nFinal objective delta:", deltaw.best)
     }
-    
-    return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list, 
-        lambda.list = params.list.best$lambda.list, convergence = converge.best, 
-        obj = obj.best, obj.history = obj.history.best, deltaw = deltaw.best, deltaw.history = deltaw.history.best, 
-        niter = niter.best, params = list(gamma = gamma, max.niter = max.niter, tol = tol, 
-            nrep = nrep, subsample.prop = subsample.prop, weight.list = weight.list, 
+
+    return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list,
+        lambda.list = params.list.best$lambda.list, convergence = converge.best,
+        obj = obj.best, obj.history = obj.history.best, deltaw = deltaw.best, deltaw.history = deltaw.history.best,
+        niter = niter.best, params = list(gamma = gamma, max.niter = max.niter, tol = tol,
+            nrep = nrep, subsample.prop = subsample.prop, weight.list = weight.list,
             n.cores = n.cores)))
 }
 
@@ -236,7 +236,7 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
 #' @export
 subsample <- function(X.list, subsample.prop, min.samples = 20, weight.list = NULL) {
     X.list.sub = lapply(1:length(X.list), function(j) {
-        
+
         x = X.list[[j]]
         n = nrow(x)
         if (is.null(weight.list)) {
@@ -244,11 +244,11 @@ subsample <- function(X.list, subsample.prop, min.samples = 20, weight.list = NU
         } else {
             w = weight.list[[j]]
             w = w/sum(w)
-            x[sample(1:n, round(max(n * subsample.prop, min(n, min.samples))), prob = w), 
+            x[sample(1:n, round(max(n * subsample.prop, min(n, min.samples))), prob = w),
                 ]
         }
     })
-    
+
     return(X.list.sub)
 }
 
@@ -276,28 +276,28 @@ subsample <- function(X.list, subsample.prop, min.samples = 20, weight.list = NU
 #' @return a list containing updated parameters: W, H.list, lambda.list,  b.list
 #'
 #' @export
-solve_subproblem_penalized <- function(params.to.update = c("W", "lambda", "b", "H"), 
-    X.list, W, H.list, b.list, lambda.list, gamma, iter, params.list.last, verbose = T, 
+solve_subproblem_penalized <- function(params.to.update = c("W", "lambda", "b", "H"),
+    X.list, W, H.list, b.list, lambda.list, gamma, iter, params.list.last, verbose = T,
     n.cores) {
     params.to.update = match.arg(params.to.update)
     m = length(X.list)
-    
+
     if (params.to.update == "W") {
-        W = solve_W_penalized(X.list = X.list, H.list = H.list, lambda.list = lambda.list, 
+        W = solve_W_penalized(X.list = X.list, H.list = H.list, lambda.list = lambda.list,
             b.list = b.list, W.old = params.list.last$W, iter = iter, n.cores = n.cores)
     } else if (params.to.update == "lambda") {
-        lambda.list = solve_lambda_list_penalized(X.list = X.list, W = W, H.list = H.list, 
-            b.list = b.list, gamma = gamma, lambda.list.old = params.list.last$lambda.list, 
+        lambda.list = solve_lambda_list_penalized(X.list = X.list, W = W, H.list = H.list,
+            b.list = b.list, gamma = gamma, lambda.list.old = params.list.last$lambda.list,
             iter = iter, n.cores = n.cores)
     } else if (params.to.update == "b") {
-        b.list = lapply(1:m, function(j) solve_b_penalized(X.list[[j]], W = W, H = H.list[[j]], 
-            lambd = lambda.list[[j]], b.old = params.list.last$b.list[[j]], iter = iter, 
+        b.list = lapply(1:m, function(j) solve_b_penalized(X.list[[j]], W = W, H = H.list[[j]],
+            lambd = lambda.list[[j]], b.old = params.list.last$b.list[[j]], iter = iter,
             n.cores = n.cores))
     } else {
-        H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]], 
+        H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]],
             b = b.list[[j]], n.cores = n.cores))
     }
-    
+
     return(list(W = W, lambda.list = lambda.list, b.list = b.list, H.list = H.list))
 }
 
@@ -311,6 +311,8 @@ solve_subproblem_penalized <- function(params.to.update = c("W", "lambda", "b", 
 #' @param lambda.list A list of scaling vector of size p (ngenes).
 #' @param b.list A list of shift vector of size p (ngenes).
 #' @param W.old W from last iteration.
+#' @param iter current iteration, for calculating the step size.
+#' @param n.cores integer number of cores used for parallel computing
 #'
 #' @return W ngenes-by-r common factor matrix shared among datasets
 #' @import checkmate parallel
@@ -320,28 +322,28 @@ solve_W_penalized <- function(X.list, H.list, lambda.list, b.list, W.old, iter, 
     p = length(lambda.list[[1]])
     m = length(H.list)
     checkmate::assert_true(all(c(length(lambda.list), length(b.list)) == rep(m, 2)))
-    
+
     nj.list = lapply(X.list, nrow)  # avoid repeated calculation
     n = sum(do.call(c, nj.list))
     r = ncol(W.old)
-    
+
     W = do.call(rbind, parallel::mclapply(1:p, function(l) {
         A = do.call(rbind, lapply(1:m, function(j) lambda.list[[j]][l] * H.list[[j]]  # nj*r
 ))  # n * r
         B = do.call(c, lapply(1:m, function(j) {
             X.list[[j]][, l] - b.list[[j]][l]  # nj*1
         }))  # n * 1
-        
+
         # add the panelty
         mu = iter * 0.1  # penalty parameter
         A = rbind(A * sqrt(1/n), sqrt(mu/r) * diag(rep(1, r)))
         B = c(B * sqrt(1/n), W.old[l, ] * sqrt(mu/r))
-        
+
         lsei::nnls(a = A, b = B)$x
     }, mc.cores = n.cores))
-    
+
     checkmate::assert_true(any(is.na(W)) == F)
-    
+
     return(W)
 }
 
@@ -355,18 +357,19 @@ solve_W_penalized <- function(X.list, H.list, lambda.list, b.list, W.old, iter, 
 #' @param gamma numeric scalar, parameter for the penalty term.
 #' @param lambda.list.old lambda.list from last iteration
 #' @param iter current iteration, for calculating the step size.
+#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return lambda.list A list of m scaling vector of size p (ngenes).
 #' @import checkmate parallel
 #' @importFrom lsei nnls
 #' @export
-solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda.list.old, 
+solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda.list.old,
     iter, n.cores) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
     m = length(nvec)
     lambda.old.mat = do.call(rbind, lambda.list.old)  # m * p
-    
+
     if (m > 1) {
         lambda.out = parallel::mclapply(1:nrow(W), function(l) {
             Ajl.list = lapply(1:m, function(j) {
@@ -375,20 +378,20 @@ solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda
             Bjl.list = lapply(1:m, function(j) {
                 X.list[[j]][, l] - b.list[[j]][l]
             })
-            
-            Amat <- diag(sapply(Ajl.list, function(Ajl) sum(Ajl^2))) + gamma * matrix(nvec, 
+
+            Amat <- diag(sapply(Ajl.list, function(Ajl) sum(Ajl^2))) + gamma * matrix(nvec,
                 ncol = 1) %*% matrix(nvec, nrow = 1)/ntotal  # m*m matrix
-            Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]])) + 
+            Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]])) +
                 gamma * nvec
-            
+
             # add penalty
             mu = iter * 0.1
             Amat = rbind(Amat, mu * diag(rep(1, m)))
             Bvec = c(Bvec, mu * lambda.old.mat[, l])
-            
+
             lambd = lsei::nnls(a = Amat, b = Bvec)$x
             lambd[is.na(lambd)] = 0
-            
+
             lambd
         }, mc.cores = n.cores)
         lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
@@ -411,22 +414,23 @@ solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda
 #'
 #' @return b shift vector of size p (ngenes).
 #' @import parallel
+#' @importFrom lsei nnls
 #' @export
 solve_b_penalized <- function(X, W, H, lambd, b.old, iter, n.cores) {
-    
+
     n = nrow(X)
     b = do.call(c, parallel::mclapply(1:nrow(W), function(l) {
         A = matrix(1, nrow = n, ncol = 1)
         B = X[, l] - H %*% W[l, ] * lambd[l]
-        
+
         # add penalty
         mu = iter * 0.1
         A = rbind(A/sqrt(n), 1 * mu)
         B = c(B/sqrt(n), b.old[l] * mu)
-        
+
         lsei::nnls(a = A, b = B)$x
     }, mc.cores = n.cores))
-    
+
     return(b)
 }
 
@@ -437,7 +441,8 @@ solve_b_penalized <- function(X, W, H, lambd, b.old, iter, n.cores) {
 #'
 #' @return a vector of scores per samples
 #'
-#' @import RSpectra
+#' @importFrom RSpectra svds
+#' @import checkmate
 #' @export
 statistical_leverage_score <- function(A, k = NULL) {
     if (is.null(k)) {
@@ -447,7 +452,7 @@ statistical_leverage_score <- function(A, k = NULL) {
         u = RSpectra::svds(A, k = k)$u
     }
     score = rowSums(u^2)
-    
+
     return(score)
 }
 

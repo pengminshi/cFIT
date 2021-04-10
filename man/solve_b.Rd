@@ -14,6 +14,8 @@ solve_b(X, W, H, lambd, n.cores)
 \item{H}{ncells-by-r nonnegative factor loading matrix}
 
 \item{lambd}{numeric scalar, scaling associated with the dataset}
+
+\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 b shift vector of size p (ngenes).

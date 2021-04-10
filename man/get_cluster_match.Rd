@@ -19,7 +19,9 @@ get_cluster_match(
 
 \item{exprs.target}{ncells-by-ngenes expression matrix of target data}
 
-\item{labels.source}{a vector of labels for target cells}
+\item{labels.source}{a vector of labels for source cells}
+
+\item{labels.target}{a vector of labels for target cells}
 
 \item{k}{integer, number of nearest neighor (by default \code{min(max.k,
 max(10, floor(0.01* (n.source + n.target))))} is used)}

@@ -28,7 +28,7 @@
 #' @importFrom gtools rdirichlet
 #' @export
 generate_data <- function(n, ntask, K, p, alpha = NULL, sig = 1, cl.sep = 1, batch.effect.sig = 0.1) {
-    
+
     if (is.null(alpha)) {
         alpha = rep(10, K)  # nearly 1/K for each cluster
     } else {
@@ -36,60 +36,60 @@ generate_data <- function(n, ntask, K, p, alpha = NULL, sig = 1, cl.sep = 1, bat
             alpha = rep(alpha, K)
         }
     }
-    
+
     # generate W: representing the cluster centerss
     centers.out = generate_centers_uniform(K = K, d = p, cl.sep = cl.sep)
     # W = t(abs(centers.out$centers)/rowSums(abs(centers.out$centers)) * 100) #
     # column sum is 100
     W = t(centers.out$centers)
-    
+
     # generate labels
     label.list = lapply(1:ntask, function(l) {
         # generate proportions of gaussian mixture
         prob = gtools::rdirichlet(1, alpha = alpha)
-        
+
         # generate labels
         sample(1:K, size = n, replace = T, prob = prob)
     })
-    
+
     # generate Hj
     H.list = lapply(1:ntask, function(l) {
-        
+
         # H, binary and row sum is 1
         label_to_membership(label.list[[l]], label.names = 1:K)  # n * K
     })
-    
+
     # generate lambdaj, mean 1 sd = 0.5, trimed at 0
     lambda.list = lapply(1:ntask, function(l) {
         lambd = rnorm(p, mean = 1, sd = batch.effect.sig)
         lambd[lambd < 0] = 0
         return(lambd)
     })
-    
+
     # generate bj, mean 0 abs(rnorm (0, sig))
     b.list = lapply(1:ntask, function(l) {
         abs(rnorm(p, mean = 0, sd = batch.effect.sig))
     })
-    
+
     # generate Ej
     E.list = lapply(1:ntask, function(l) {
         matrix(rnorm(n * p, mean = 0, sd = sig), nrow = n)
     })
-    
+
     # generate Ej to get Xj
     X.list = lapply(1:ntask, function(l) {
-        X = H.list[[l]] %*% t(W * lambda.list[[l]]) + matrix(1, nrow = n, ncol = 1) %*% 
+        X = H.list[[l]] %*% t(W * lambda.list[[l]]) + matrix(1, nrow = n, ncol = 1) %*%
             b.list[[l]] + E.list[[l]]
         X[X < 0] = 0
-        
+
         colnames(X) = paste0("gene_", 1:ncol(X))
         rownames(X) = paste0("cell_", l, 1:nrow(X))
         X
     })
-    
-    return(list(X.list = X.list, H.list = H.list, lambda.list = lambda.list, b.list = b.list, 
+
+    return(list(X.list = X.list, H.list = H.list, lambda.list = lambda.list, b.list = b.list,
         E.list = E.list, label.list = label.list, W = W))
-    
+
 }
 
 #' Generate gaussian centers with fixed minimum separation c
@@ -104,13 +104,14 @@ generate_data <- function(n, ntask, K, p, alpha = NULL, sig = 1, cl.sep = 1, bat
 #'  \item{centers}{generated K-by-d corresponding to K centers in d-dim space}
 #'  \item{status}{boolean indicating whether the generationg is successful}
 #' }
+#' @import checkmate
 generate_centers_uniform <- function(K, d, cl.sep) {
-    assertthat::assert_that(K >= 2)
-    
+    checkmate::assert_true(K >= 2)
+
     val_norm = sapply(runif(K * d), dist_norm, d, K)
-    
+
     centers = matrix(val_norm * cl.sep, nrow = K)
-    
+
     return(list(centers = centers, status = T))
 }
 
@@ -126,7 +127,7 @@ dist_norm <- function(x, d, K) {
 #' Convert label vector to membership matrix
 #'
 #' @param labels a vector of labels from K distint classes
-#' @param labels.names (optional) alternative label names, used for naming columns of membership matrix
+#' @param label.names (optional) alternative label names, used for naming columns of membership matrix
 #'
 #' @return an n-by-K binary membership matrix
 #' @import checkmate
@@ -137,9 +138,9 @@ label_to_membership <- function(labels, label.names = NULL) {
     } else {
         checkmate::assert_true(all(labels %in% label.names))
     }
-    
+
     memb = t(sapply(labels, function(lab) as.numeric(label.names == lab)))
-    
+
     return(memb)
 }
 

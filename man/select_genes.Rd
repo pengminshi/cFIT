@@ -4,7 +4,7 @@
 \alias{select_genes}
 \title{Select highly variabel genes shared among datasets}
 \usage{
-select_genes(X.list, ngenes = 3000, subset = NULL, verbose = F)
+select_genes(X.list, ngenes = 3000, verbose = F)
 }
 \arguments{
 \item{X.list}{a list of m cells-by-genes gene expression matrices from m data sets}

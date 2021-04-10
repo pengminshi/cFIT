@@ -16,6 +16,8 @@ solve_lambda_list(X.list, W, H.list, b.list, gamma, n.cores)
 \item{b.list}{A list of shift vector of size p (ngenes).}
 
 \item{gamma}{numeric scalar, parameter for the penalty term.}
+
+\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 lambda.list A list of m scaling vector of size p (ngenes).

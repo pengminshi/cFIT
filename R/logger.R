@@ -8,7 +8,7 @@
 #' @export
 log_to_file <- function(fn, logger = "ROOT", newfile = False) {
     if (newfile) {
-        if (file.exists(fn)) 
+        if (file.exists(fn))
             # Delete file if it exists
         file.remove(fn)
     }
@@ -37,7 +37,7 @@ log_to_console <- function(logger = "ROOT") {
 #' @export
 log_to_both <- function(fn, logger = "ROOT", newfile = F) {
     if (newfile) {
-        if (file.exists(fn)) 
+        if (file.exists(fn))
             # Delete file if it exists
         file.remove(fn)
     }
@@ -60,7 +60,7 @@ set_log_level <- function(level = "INFO", logger = "ROOT") {
 #' Log message
 #'
 #' @param level log streshold
-#' @param l... log messages
+#' @param ... log messages
 #'
 #' @import futile.logger
 #' @export

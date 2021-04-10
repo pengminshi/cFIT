@@ -16,6 +16,8 @@ transfer_objective_func(X, W, H, lambd, b, n.cores)
 \item{lambd}{A numeric vecor of the scaling}
 
 \item{b}{A numeric shift vector of size p (ngenes).}
+
+\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 numeric scalar, the value of the objective function

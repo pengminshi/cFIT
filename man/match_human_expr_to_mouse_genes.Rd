@@ -7,9 +7,9 @@
 match_human_expr_to_mouse_genes(human.exprs, mouse.genes.list)
 }
 \arguments{
-\item{mouse.genes.list}{a character vector of mouse gene symbols, indicating which genes are to match}
+\item{human.exprs}{ncell-by-ngene expression matrix of human}
 
-\item{human.expres}{ncell-by-ngene expression matrix of human}
+\item{mouse.genes.list}{a character vector of mouse gene symbols, indicating which genes are to match}
 }
 \value{
 ncell-by-ngene' of mapped mouse expression matrix
