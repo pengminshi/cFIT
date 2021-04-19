@@ -4,7 +4,7 @@
 \alias{solve_b}
 \title{Solve for dataset specific shift b}
 \usage{
-solve_b(X, W, H, lambd, n.cores)
+solve_b(X, W, H, lambd)
 }
 \arguments{
 \item{X}{ncells-by-ngenes gene expression matrix}
@@ -14,8 +14,6 @@ solve_b(X, W, H, lambd, n.cores)
 \item{H}{ncells-by-r nonnegative factor loading matrix}
 
 \item{lambd}{numeric scalar, scaling associated with the dataset}
-
-\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 b shift vector of size p (ngenes).

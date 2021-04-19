@@ -8,9 +8,10 @@
 #' @param max.niter integer, max number of iterations (default 100).
 #' @param tol numeric scalar, tolerance used in stopping criteria (default 1e-5).
 #' @param init a list of parameters for parameter initialization: lambda, b, H
+#' @param future.plan plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.
+#' @param workers additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #' @param seed random seed used (default 0)
-#' @param n.cores number of cores used for parallel computing
 #'
 #' @return a list containing  \describe{
 #'  \item{H}{estimated factor loading matrix of size ncells-by-r}
@@ -26,9 +27,13 @@
 #' @import checkmate parallel
 #' @export
 CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NULL,
-    seed = 0, verbose = T, n.cores = parallel::detectCores() - 4) {
+                         future.plan=c('multicore','sequential','transparent','multisession','cluster'),
+                         workers = parallel::detectCores() - 1, seed = 0, verbose = T) {
 
     checkmate::assert_true(ncol(Xtarget) == nrow(Wref))
+    env.plan = future::plan()
+    future.plan = match.arg(future.plan)
+    future::plan(future.plan)
 
     if (!is.null(rownames(Wref)) & !is.null(colnames(Xtarget))) {
         checkmate::assert_true(all(rownames(Wref) == colnames(Xtarget)))
@@ -54,11 +59,11 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
         if (verbose)
             logmsg("Initialize target H, b, Lambda ...")
         params.list = list(b = rep(0, p), lambda = rep(1, p), H = solve_H(Xtarget,
-            W = Wref, lambd = rep(1, p), b = rep(0, p), n.cores = n.cores))
+            W = Wref, lambd = rep(1, p), b = rep(0, p)))
     }
 
     obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda,
-        b = params.list$b, n.cores = n.cores)
+        b = params.list$b)
     converge = F
 
     for (iter in 1:max.niter) {
@@ -72,12 +77,12 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
 
             params.list = transfer_solve_subproblem(params.to.update = params.to.update,
                 X = Xtarget, W = Wref, H = params.list$H, b = params.list$b, lambd = params.list$lambda,
-                verbose = verbose, n.cores = n.cores)
+                verbose = verbose)
         }
 
 
         obj = transfer_objective_func(X = Xtarget, W = Wref, H = params.list$H, lambd = params.list$lambda,
-            b = params.list$b, n.cores = n.cores)
+            b = params.list$b)
 
         delta = abs(obj - obj.old)/mean(c(obj, obj.old))
         if (verbose)
@@ -107,6 +112,7 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
         names(params.list$b) = colnames(Xtarget)
         names(params.list$lambda) = colnames(Xtarget)
     }
+    future::plan(env.plan)
 
     return(list(H = params.list$H, b = params.list$b, lambda = params.list$lambda,
         convergence = converge, obj = obj, niter = iter, delta = delta, params = list(max.niter = max.niter,
@@ -123,11 +129,10 @@ CFITTransfer <- function(Xtarget, Wref, max.niter = 100, tol = 1e-05, init = NUL
 #' @param H A factor loading matrix of size ncells-by-r
 #' @param lambd A numeric vecor of the scaling
 #' @param b A numeric shift vector of size p (ngenes).
-#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return numeric scalar, the value of the objective function
 #' @export
-transfer_objective_func <- function(X, W, H, lambd, b, n.cores) {
+transfer_objective_func <- function(X, W, H, lambd, b) {
     n = nrow(X)
     tmp = t(X) - lambd * W %*% t(H) - b  # p by n
     obj = sum(tmp^2)/n
@@ -149,20 +154,19 @@ transfer_objective_func <- function(X, W, H, lambd, b, n.cores) {
 #' @param b A numeric shift vector of size p (ngenes).
 #' @param lambda A numeric scaling vector of size p (ngenes)
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
-#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return a list containing updated parameters: H, lambda,  b
 #' @export
 transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"), X,
-    W, H, b, lambd, n.cores, verbose = T) {
+    W, H, b, lambd, verbose = T) {
     params.to.update = match.arg(params.to.update)
 
     if (params.to.update == "lambda") {
-        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b, n.cores = n.cores)
+        lambd = transfer_solve_lambda(X = X, W = W, H = H, b = b)
     } else if (params.to.update == "b") {
-        b = solve_b(X = X, W = W, H = H, lambd = lambd, n.cores = n.cores)
+        b = solve_b(X = X, W = W, H = H, lambd = lambd)
     } else {
-        H = solve_H(X = X, W = W, lambd = lambd, b = b, n.cores = n.cores)
+        H = solve_H(X = X, W = W, lambd = lambd, b = b)
     }
     return(list(lambda = lambd, b = b, H = H))
 }
@@ -176,26 +180,25 @@ transfer_solve_subproblem <- function(params.to.update = c("lambda", "b", "H"), 
 #' @param W An ngenes-by-r reference low dimensional factor matrix
 #' @param H A factor loading matrix of size ncells-by-r
 #' @param b A numeric shift vector of size p (ngenes).
-#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return numeric vector, scaling of target data with respect to the reference factor matrix
 #' @import parallel
 #' @export
-transfer_solve_lambda <- function(X, W, H, b, n.cores) {
+transfer_solve_lambda <- function(X, W, H, b) {
 
     n = nrow(X)
 
     A = H %*% t(W)
     xmean = mean(c(X))
 
-    lambd = do.call(c, parallel::mclapply(1:ncol(X), function(l) {
+    lambd = do.call(c, future.apply::future_lapply(1:ncol(X), function(l) {
         a_l = A[, l]
         b_l = X[, l] - b[l]
 
         x = max(0, (a_l %*% b_l)/(a_l %*% a_l))
         x[is.na(x)] = 0
         x
-    }, mc.cores = n.cores))
+    }))
 
     return(lambd)
 }

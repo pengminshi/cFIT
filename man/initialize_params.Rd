@@ -4,14 +4,7 @@
 \alias{initialize_params}
 \title{Initialize parameters for data integration or transfer}
 \usage{
-initialize_params(
-  X.list,
-  r,
-  gamma,
-  W = NULL,
-  verbose = TRUE,
-  n.cores = parallel::detectCores() - 4
-)
+initialize_params(X.list, r, gamma, W = NULL, verbose = TRUE)
 }
 \arguments{
 \item{X.list}{a list of ncells-by-ngenes gene expression matrix}
@@ -25,8 +18,6 @@ value (default 1e6)}
 \item{W}{ngenes-by-r numeric matrix. Supplied if parameter initialization is provided (default NULL).}
 
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
-
-\item{n.cores}{number of cores used for parallel computing}
 }
 \value{
 a list containing initialized parameters: W, H.list, lambda.list,  b.list
