@@ -4,7 +4,7 @@
 \alias{solve_H}
 \title{Solve for factor loading paramters H}
 \usage{
-solve_H(X, W, lambd, b, n.cores)
+solve_H(X, W, lambd, b)
 }
 \arguments{
 \item{X}{ncells-by-ngenes gene expression matrix}
@@ -14,8 +14,6 @@ solve_H(X, W, lambd, b, n.cores)
 \item{lambd}{nonnegative numeric scalar, scaling associated with the dataset}
 
 \item{b}{nonegative scalar, shift associated with tht edataset}
-
-\item{n.cores}{number of cores used for the process}
 }
 \value{
 ncells-by-r matrix, factor loading matrix H

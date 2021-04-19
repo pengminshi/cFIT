@@ -4,7 +4,7 @@
 \alias{objective_func}
 \title{Calculate the objective function}
 \usage{
-objective_func(X.list, W, lambda.list, H.list, b.list, gamma, n.cores)
+objective_func(X.list, W, lambda.list, H.list, b.list, gamma)
 }
 \arguments{
 \item{X.list}{a list of ncells-by-ngenes gene expression matrix}
@@ -18,8 +18,6 @@ objective_func(X.list, W, lambda.list, H.list, b.list, gamma, n.cores)
 \item{b.list}{A list of shift vector of size p (ngenes).}
 
 \item{gamma}{numeric scalar, parameter for the penalty term.}
-
-\item{n.cores}{number of cores used for parallel computing}
 }
 \value{
 numeric scalar, the value of the objective function

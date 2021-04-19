@@ -14,9 +14,10 @@
 #' @param nrep integer, number of repeated runs (to reduce effect of local optimum, default 1)
 #' @param init a list of parameters for parameter initialization. The list either contains all
 #' parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provided (default NULL).
+#' @param future.plan plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.
+#' @param workers additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #' @param seed random seed used (default 0)
-#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return a list containing  \describe{
 #'  \item{W}{ngenes-by-r numeric matrix, estimated common factor matrix}
@@ -31,12 +32,26 @@
 #' }
 #'
 #' @import checkmate parallel
+#' @importFrom future.apply future_apply
+#' @importFrom future plan
 #' @export
 CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 1e+06,
-    nrep = 1, init = NULL, verbose = T, seed = 0, n.cores = parallel::detectCores() -
-        4) {
+    nrep = 1, init = NULL,
+    future.plan=c('multicore','sequential','transparent','multisession','cluster'),
+    workers = parallel::detectCores() - 1,
+    verbose = T, seed = 0) {
 
-    message("Run cFIT with ", n.cores, " cores ...")
+    env.plan = future::plan()
+    future.plan = match.arg(future.plan)
+    future::plan(future.plan)
+
+    if (verbose){
+        logmsg("Run cFIT with ", future.plan,  " plan ...")
+        if (future.plan %in% c('multicore', 'multisession', 'cluster')){
+            logmsg('Worker: ', workers)
+        }
+    }
+
     m = length(X.list)
 
     # subset to the shared genes
@@ -86,12 +101,11 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
             if (verbose)
                 logmsg("Initialize W, H, b, Lambda ...")
             params.list = initialize_params(X.list = X.list, r = r, gamma = gamma,
-                W = init$W, verbose = verbose, n.cores = n.cores)
+                W = init$W, verbose = verbose)
         }
 
         obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
-            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma,
-            n.cores = n.cores)
+            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma)
         if (verbose)
             logmsg("Objective for initialization = ", obj)
 
@@ -120,12 +134,12 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
                 params.list = solve_subproblem(params.to.update = params.to.update,
                   X.list = X.list, W = params.list$W, H.list = params.list$H.list,
                   b.list = params.list$b.list, lambda.list = params.list$lambda.list,
-                  gamma = gamma, verbose = verbose, n.cores = n.cores)
+                  gamma = gamma, verbose = verbose)
             }
 
             obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
                 lambda.list = params.list$lambda.list, b.list = params.list$b.list,
-                gamma = gamma, n.cores = n.cores)
+                gamma = gamma)
             obj.history = c(obj.history, obj)
 
             # relative difference of objective function
@@ -175,11 +189,13 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
         rownames(params.list.best$W) = colnames(X.list[[1]])
     }
 
+    future::plan(env.plan)
+
     return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list,
         lambda.list = params.list.best$lambda.list, convergence = converge.best,
         obj = obj.best, obj.history = obj.history.best, delta = delta.best, delta.history = delta.history.best,
         deltaw.history.best = deltaw.history.best, niter = niter.best, params = list(gamma = gamma,
-            max.niter = max.niter, tol = tol, nrep = nrep, seed = seed, n.cores = n.cores)))
+            max.niter = max.niter, tol = tol, nrep = nrep, seed = seed)))
 }
 
 
@@ -193,11 +209,10 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
 #' @param H.list A list of factor loading matrix of size ncells-by-r
 #' @param b.list A list of shift vector of size p (ngenes).
 #' @param gamma numeric scalar, parameter for the penalty term.
-#' @param n.cores number of cores used for parallel computing
 #'
 #' @return numeric scalar, the value of the objective function
 #' @export
-objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma, n.cores) {
+objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
     obj.list = lapply(1:length(X.list), function(j) {
         tmp1 = H.list[[j]] %*% t(W)
         tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
@@ -229,27 +244,26 @@ objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma, n.core
 #' @param b.list A list of shift vector of size p (ngenes).
 #' @param gamma numeric scalar, parameter for the penalty term.
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
-#' @param n.cores integer number of cores used for parallel computing
 #'
 #' @return a list containing updated parameters: W, H.list, lambda.list,  b.list
 #' @export
 solve_subproblem <- function(params.to.update = c("W", "lambda", "b", "H"), X.list,
-    W, H.list, b.list, lambda.list, gamma, verbose = T, n.cores) {
+    W, H.list, b.list, lambda.list, gamma, verbose = T) {
     params.to.update = match.arg(params.to.update)
     m = length(X.list)
 
     if (params.to.update == "W") {
         W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list,
-            b.list = b.list, n.cores = n.cores)
+            b.list = b.list)
     } else if (params.to.update == "lambda") {
         lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list,
-            b.list = b.list, gamma = gamma, n.cores = n.cores)
+            b.list = b.list, gamma = gamma)
     } else if (params.to.update == "b") {
         b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W = W, H = H.list[[j]],
-            lambd = lambda.list[[j]], n.cores = n.cores))
+            lambd = lambda.list[[j]]))
     } else {
         H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]],
-            b = b.list[[j]], n.cores = n.cores))
+            b = b.list[[j]]))
     }
 
     return(list(W = W, lambda.list = lambda.list, b.list = b.list, H.list = H.list))
@@ -296,13 +310,11 @@ initialize_params_random <- function(X.list, r, seed = 0) {
 #' value (default 1e6)
 #' @param W ngenes-by-r numeric matrix. Supplied if parameter initialization is provided (default NULL).
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
-#' @param n.cores number of cores used for parallel computing
 #'
 #' @return a list containing initialized parameters: W, H.list, lambda.list,  b.list
 #' @import parallel checkmate
 #' @export
-initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE, n.cores = parallel::detectCores() -
-    4) {
+initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
     m = length(X.list)
     p = ncol(X.list[[1]])
 
@@ -326,13 +338,13 @@ initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE, n.core
 
         # initialize H nonegative ensured
         H.list = lapply(1:m, function(j) solve_H(X.list.scale[[j]], W = W, lambd = rep(1,
-            p), b = rep(0, p), n.cores = n.cores))
+            p), b = rep(0, p)))
 
         # update W, nonnegative ensured
         b.list.init = lapply(1:m, function(j) rep(0, p))
         lambda.list.init = lapply(1:m, function(j) rep(1, p))
         W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list.init,
-            b.list = b.list.init, n.cores = n.cores)
+            b.list = b.list.init)
     } else {
 
         # check nonegative
@@ -340,17 +352,17 @@ initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE, n.core
 
         # initialize H nonegative ensured
         H.list = lapply(1:m, function(j) solve_H(X.list[[j]], W = W, lambd = rep(1,
-            p), b = rep(0, p), n.cores = n.cores))
+            p), b = rep(0, p)))
     }
 
     # initialize lambda
     b.list.init = lapply(1:m, function(j) rep(0, p))
     lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list.init,
-        gamma = gamma, n.cores = n.cores)
+        gamma = gamma)
 
     # initialize b
     b.list = lapply(1:m, function(j) solve_b(X = X.list[[j]], W = W, H = H.list[[j]],
-        lambd = lambda.list[[j]], n.cores = n.cores))
+        lambd = lambda.list[[j]]))
 
     return(list(W = W, H.list = H.list, lambda.list = lambda.list, b.list = b.list))
 }
@@ -363,13 +375,12 @@ initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE, n.core
 #' @param W ngenes-by-r non-negative common factor matrix
 #' @param lambd nonnegative numeric scalar, scaling associated with the dataset
 #' @param b nonegative scalar, shift associated with tht edataset
-#' @param n.cores number of cores used for the process
 #'
 #' @return ncells-by-r matrix, factor loading matrix H
 #' @import checkmate parallel
 #' @importFrom lsei pnnls
 #' @export
-solve_H <- function(X, W, lambd, b, n.cores) {
+solve_H <- function(X, W, lambd, b) {
     # check size X n*p, W p*r, lambda p, b p
     checkmate::assert_true(all(c(ncol(X), nrow(W), length(lambd)) == rep(length(b),
         3)))
@@ -398,14 +409,14 @@ solve_H <- function(X, W, lambd, b, n.cores) {
 #' @importFrom lsei nnls
 #'
 #' @export
-solve_W <- function(X.list, H.list, lambda.list, b.list, n.cores) {
+solve_W <- function(X.list, H.list, lambda.list, b.list) {
     p = length(lambda.list[[1]])
     m = length(H.list)
     checkmate::assert_true(all(c(length(lambda.list), length(b.list)) == rep(m, 2)))
 
     nj.list = lapply(X.list, nrow)  # avoid repeated calculation
 
-    W = do.call(rbind, parallel::mclapply(1:p, function(l) {
+    W = do.call(rbind, future.apply::future_lapply(1:p, function(l) {
         A = do.call(rbind, lapply(1:m, function(j) lambda.list[[j]][l] * H.list[[j]]  # nj*r
 ))
         B = do.call(c, lapply(1:m, function(j) {
@@ -413,7 +424,7 @@ solve_W <- function(X.list, H.list, lambda.list, b.list, n.cores) {
         }))
 
         lsei::nnls(a = A, b = B)$x
-    }, mc.cores = n.cores))
+    }))
 
     checkmate::assert_true(any(is.na(W)) == F)
 
@@ -430,20 +441,19 @@ solve_W <- function(X.list, H.list, lambda.list, b.list, n.cores) {
 #' @param W ngenes-by-r non-negative common factor matrix
 #' @param b.list A list of shift vector of size p (ngenes).
 #' @param gamma numeric scalar, parameter for the penalty term.
-#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return lambda.list A list of m scaling vector of size p (ngenes).
 #' @import checkmate parallel
 #' @importFrom lsei nnls
 #'
 #' @export
-solve_lambda_list <- function(X.list, W, H.list, b.list, gamma, n.cores) {
+solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
     m = length(nvec)
 
     if (m > 1) {
-        lambda.out = parallel::mclapply(1:nrow(W), function(l) {
+        lambda.out = future.apply::future_lapply(1:nrow(W), function(l) {
             Ajl.list = lapply(1:m, function(j) {
                 H.list[[j]] %*% W[l, ]  # nj * 1
             })
@@ -460,7 +470,7 @@ solve_lambda_list <- function(X.list, W, H.list, b.list, gamma, n.cores) {
             lambd[is.na(lambd)] = 0
 
             lambd
-        }, mc.cores = n.cores)
+        })
         lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
     } else {
         # only one dataset
@@ -478,17 +488,16 @@ solve_lambda_list <- function(X.list, W, H.list, b.list, gamma, n.cores) {
 #' @param W ngenes-by-r non-negative common factor matrix
 #' @param H ncells-by-r nonnegative factor loading matrix
 #' @param lambd numeric scalar, scaling associated with the dataset
-#' @param n.cores integer, number of cores used for parallel computation
 #'
 #' @return b shift vector of size p (ngenes).
 #'
 #' @import parallel
 #' @export
-solve_b <- function(X, W, H, lambd, n.cores) {
+solve_b <- function(X, W, H, lambd) {
 
-    b = do.call(c, parallel::mclapply(1:nrow(W), function(l) {
+    b = do.call(c, future.apply::future_lapply(1:nrow(W), function(l) {
         max(0, mean(X[, l] - H %*% W[l, ] * lambd[l]))
-    }, mc.cores = n.cores))
+    }))
 
     return(b)
 }

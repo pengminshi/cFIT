@@ -11,7 +11,6 @@ transfer_solve_subproblem(
   H,
   b,
   lambd,
-  n.cores,
   verbose = T
 )
 }
@@ -26,8 +25,6 @@ specifying which set of parameters to update}
 \item{H}{A factor loading matrix of size ncells-by-r}
 
 \item{b}{A numeric shift vector of size p (ngenes).}
-
-\item{n.cores}{integer, number of cores used for parallel computation}
 
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
 

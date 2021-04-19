@@ -4,7 +4,7 @@
 \alias{solve_lambda_list}
 \title{Solve for dataset specific scalings lambda.list}
 \usage{
-solve_lambda_list(X.list, W, H.list, b.list, gamma, n.cores)
+solve_lambda_list(X.list, W, H.list, b.list, gamma)
 }
 \arguments{
 \item{X.list}{A list of ncells-by-ngenes gene expression matrix.}
@@ -16,8 +16,6 @@ solve_lambda_list(X.list, W, H.list, b.list, gamma, n.cores)
 \item{b.list}{A list of shift vector of size p (ngenes).}
 
 \item{gamma}{numeric scalar, parameter for the penalty term.}
-
-\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 lambda.list A list of m scaling vector of size p (ngenes).

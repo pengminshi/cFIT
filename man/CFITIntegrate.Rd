@@ -12,9 +12,10 @@ CFITIntegrate(
   gamma = 1e+06,
   nrep = 1,
   init = NULL,
+  future.plan = c("multicore", "sequential", "transparent", "multisession", "cluster"),
+  workers = parallel::detectCores() - 1,
   verbose = T,
-  seed = 0,
-  n.cores = parallel::detectCores() - 4
+  seed = 0
 )
 }
 \arguments{
@@ -35,11 +36,13 @@ value (default 1e6)}
 \item{init}{a list of parameters for parameter initialization. The list either contains all
 parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provided (default NULL).}
 
+\item{future.plan}{plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.}
+
+\item{workers}{additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.}
+
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
 
 \item{seed}{random seed used (default 0)}
-
-\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 a list containing  \describe{

@@ -10,9 +10,10 @@ CFITTransfer(
   max.niter = 100,
   tol = 1e-05,
   init = NULL,
+  future.plan = c("multicore", "sequential", "transparent", "multisession", "cluster"),
+  workers = parallel::detectCores() - 1,
   seed = 0,
-  verbose = T,
-  n.cores = parallel::detectCores() - 4
+  verbose = T
 )
 }
 \arguments{
@@ -26,11 +27,13 @@ CFITTransfer(
 
 \item{init}{a list of parameters for parameter initialization: lambda, b, H}
 
+\item{future.plan}{plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.}
+
+\item{workers}{additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.}
+
 \item{seed}{random seed used (default 0)}
 
 \item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
-
-\item{n.cores}{number of cores used for parallel computing}
 }
 \value{
 a list containing  \describe{

@@ -4,7 +4,7 @@
 \alias{transfer_solve_lambda}
 \title{Solve for dataset specific scalings lambda for target data}
 \usage{
-transfer_solve_lambda(X, W, H, b, n.cores)
+transfer_solve_lambda(X, W, H, b)
 }
 \arguments{
 \item{X}{An ncells-by-ngenes gene expression matrix}
@@ -14,8 +14,6 @@ transfer_solve_lambda(X, W, H, b, n.cores)
 \item{H}{A factor loading matrix of size ncells-by-r}
 
 \item{b}{A numeric shift vector of size p (ngenes).}
-
-\item{n.cores}{integer, number of cores used for parallel computation}
 }
 \value{
 numeric vector, scaling of target data with respect to the reference factor matrix
