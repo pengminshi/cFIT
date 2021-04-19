@@ -66,7 +66,7 @@ The `panc8` is saved as Seurat object, we extract the raw expression and cell me
 # extract the raw counts and metadata for data sets from 5 technologies
 data.list = split_dataset_by_batch(X=t(as.matrix(panc8@assays$RNA@counts)), 
                                    batch = panc8@meta.data$tech, 
-                                   labels = panc8@meta.data$celltype, 
+                                   labels = panc8@meta.data$celltype,
                                    metadata = panc8@meta.data, 
                                    dataset.name = 'panc:')
 
