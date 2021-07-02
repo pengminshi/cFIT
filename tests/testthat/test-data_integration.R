@@ -72,6 +72,3 @@ test_that("data integration with large number of genes", {
 })
 
 
-
-
-

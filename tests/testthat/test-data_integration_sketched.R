@@ -72,6 +72,12 @@ test_that("data integration (sketched version) with large number of genes", {
 })
 
 
+test_that("data integration with large number of cells",{
+    data.out = generate_data(n=80000, p=2000, ntask=5, K=6, cl.sep=1, sig=1, batch.effect.sig=1, alpha=0.5)
+    int.out = CFITIntegrate(X.list=data.out$X.list, r=6, max.niter = 2,
+                            future.plan = 'multicore', workers=16,
+                            seed=42, verbose=F)
+})
 
 
 
