@@ -152,7 +152,7 @@ transfer_objective_func <- function(X, W, H, lambd, b) {
 #' @param W An ngenes-by-r reference low dimensional factor matrix
 #' @param H A factor loading matrix of size ncells-by-r
 #' @param b A numeric shift vector of size p (ngenes).
-#' @param lambda A numeric scaling vector of size p (ngenes)
+#' @param lambd A numeric scaling vector of size p (ngenes)
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return a list containing updated parameters: H, lambda,  b

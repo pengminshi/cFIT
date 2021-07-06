@@ -28,7 +28,9 @@ Imports:
     reshape2,
     ggplot2,
     uwot,
-    gtools
+    gtools,
+    future,
+    future.apply
 Depends:
     R (>= 3.6.0)
 Config/testthat/edition: 3

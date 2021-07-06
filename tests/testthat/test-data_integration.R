@@ -1,6 +1,6 @@
 
 
-test_that("data transfer", {
+test_that("data integration", {
     library(SeuratData)
     # InstallData("panc8") # if not installed, require memory of 118MB
     data("panc8")

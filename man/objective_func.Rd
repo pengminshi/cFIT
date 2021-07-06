@@ -4,7 +4,7 @@
 \alias{objective_func}
 \title{Calculate the objective function}
 \usage{
-objective_func(X.list, W, lambda.list, H.list, b.list, gamma)
+objective_func(X.list, W, lambda.list, H.list, b.list)
 }
 \arguments{
 \item{X.list}{a list of ncells-by-ngenes gene expression matrix}
@@ -16,12 +16,10 @@ objective_func(X.list, W, lambda.list, H.list, b.list, gamma)
 \item{H.list}{A list of factor loading matrix of size ncells-by-r}
 
 \item{b.list}{A list of shift vector of size p (ngenes).}
-
-\item{gamma}{numeric scalar, parameter for the penalty term.}
 }
 \value{
 numeric scalar, the value of the objective function
 }
 \description{
-\deqn{1/N \sum_j||X_j -(H_JW^T\Lambda_j  + 1_nj b_j^T)||_F^2 +gamma \sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}
+\deqn{1/N \sum_j||X_j -(H_JW^T\Lambda_j  + 1_{n_j} b_j^T)||_F^2}
 }

@@ -26,9 +26,9 @@ specifying which set of parameters to update}
 
 \item{b}{A numeric shift vector of size p (ngenes).}
 
-\item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
+\item{lambd}{A numeric scaling vector of size p (ngenes)}
 
-\item{lambda}{A numeric scaling vector of size p (ngenes)}
+\item{verbose}{boolean scalar, whether to show extensive program logs (default TRUE)}
 }
 \value{
 a list containing updated parameters: H, lambda,  b

@@ -1,20 +1,17 @@
 #' Integration of multiple data source.
 #'
 #' Solve the model parameters through Iterative Nonnegative Matrix Factorization (iNMF),
-#' by minimizing the objective function \deqn{1/N \sum_j||X_j -(H_JW^T\Lambda_j  + 1_nj b_j^T)||_F^2 +
-#' gamma \sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}.
+#' by minimizing the objective function \deqn{1/N \sum_j||X_j -(H_jW^T\Lambda_j  + 1_{n_j} b_j^T)||_F^2} with penalties.
 #'
 #' @param X.list a list of m ncells-by-ngenes, gene expression matrices from m data sets
 #' @param r scalar, dimension of common factor matrix, which can be chosen as the rough number of
 #' identifiable cells types in the joint population (default 15).
 #' @param max.niter integer, max number of iterations (default 100).
 #' @param tol numeric scalar, tolerance used in stopping criteria (default 1e-5).
-#' @param gamma numeric scalar, parameter for the penalty term. It is sufficient to chose a large
-#' value (default 1e6)
 #' @param nrep integer, number of repeated runs (to reduce effect of local optimum, default 1)
 #' @param init a list of parameters for parameter initialization. The list either contains all
 #' parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provided (default NULL).
-#' @param future.plan plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.
+#' @param future.plan plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Default is 'sequential'. Note that Rstudio does not support 'multicore'.
 #' @param workers additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #' @param seed random seed used (default 0)
@@ -28,16 +25,16 @@
 #'  \item{obj}{numeric scalar, value of the objective function at convergence or when maximum iteration achieved}
 #'  \item{niter}{integer, the iteration at convergence (or maximum iteration if not converge)}
 #'  \item{delta}{numeric scalar, the relative difference in last objective update}
-#'  \item{params}{list of parameters used for the algorithm: gamma, max.iter, tol, nrep}
+#'  \item{params}{list of parameters used for the algorithm: max.iter, tol, nrep}
 #' }
 #'
 #' @import checkmate parallel
 #' @importFrom future.apply future_apply
 #' @importFrom future plan
 #' @export
-CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 1e+06,
+CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05,
     nrep = 1, init = NULL,
-    future.plan=c('multicore','sequential','transparent','multisession','cluster'),
+    future.plan=c('sequential','transparent','multicore','multisession','cluster'),
     workers = parallel::detectCores() - 1,
     verbose = T, seed = 0) {
 
@@ -100,12 +97,12 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
             # initialize the parameters, W can be supplied or initialized
             if (verbose)
                 logmsg("Initialize W, H, b, Lambda ...")
-            params.list = initialize_params(X.list = X.list, r = r, gamma = gamma,
+            params.list = initialize_params(X.list = X.list, r = r,
                 W = init$W, verbose = verbose)
         }
 
         obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
-            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma)
+            lambda.list = params.list$lambda.list, b.list = params.list$b.list)
         if (verbose)
             logmsg("Objective for initialization = ", obj)
 
@@ -124,7 +121,7 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
             w.old = params.list$W
 
             # random permute update order to ensure convergence
-            params.to.update.list = sample(c("W", "lambda", "b", "H"), 4, replace = F)
+            params.to.update.list = sample(c("W", "lambda", "H"), replace = F)
             if (verbose)
                 logmsg("iter ", iter, ", update by: ", paste(params.to.update.list,
                   collapse = "->"))
@@ -134,12 +131,11 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
                 params.list = solve_subproblem(params.to.update = params.to.update,
                   X.list = X.list, W = params.list$W, H.list = params.list$H.list,
                   b.list = params.list$b.list, lambda.list = params.list$lambda.list,
-                  gamma = gamma, verbose = verbose)
+                  verbose = verbose)
             }
 
             obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
-                lambda.list = params.list$lambda.list, b.list = params.list$b.list,
-                gamma = gamma)
+                lambda.list = params.list$lambda.list, b.list = params.list$b.list)
             obj.history = c(obj.history, obj)
 
             # relative difference of objective function
@@ -194,25 +190,28 @@ CFITIntegrate <- function(X.list, r = 15, max.niter = 100, tol = 1e-05, gamma = 
     return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list,
         lambda.list = params.list.best$lambda.list, convergence = converge.best,
         obj = obj.best, obj.history = obj.history.best, delta = delta.best, delta.history = delta.history.best,
-        deltaw.history.best = deltaw.history.best, niter = niter.best, params = list(gamma = gamma,
+        deltaw.history.best = deltaw.history.best, niter = niter.best, params = list(#gamma = gamma,
             max.niter = max.niter, tol = tol, nrep = nrep, seed = seed)))
 }
 
 
 #' Calculate the objective function
 #'
-#' \deqn{1/N \sum_j||X_j -(H_JW^T\Lambda_j  + 1_nj b_j^T)||_F^2 +gamma \sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}
+#' \deqn{1/N \sum_j||X_j -(H_JW^T\Lambda_j  + 1_{n_j} b_j^T)||_F^2}
 #'
 #' @param X.list a list of ncells-by-ngenes gene expression matrix
 #' @param W ngenes-by-r numeric matrix.
 #' @param lambda.list A list of scaling vector of size p (ngenes).
 #' @param H.list A list of factor loading matrix of size ncells-by-r
 #' @param b.list A list of shift vector of size p (ngenes).
-#' @param gamma numeric scalar, parameter for the penalty term.
 #'
 #' @return numeric scalar, the value of the objective function
 #' @export
-objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
+objective_func <- function(X.list, W, lambda.list, H.list, b.list) {
+    if (is.null(H.list)){
+        H.list = lapply(1:length(X.list), function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]],
+                                                 b = b.list[[j]]))
+    }
     obj.list = lapply(1:length(X.list), function(j) {
         tmp1 = H.list[[j]] %*% t(W)
         tmp2 = matrix(1, nrow = nrow(X.list[[j]]), ncol = 1) %*% b.list[[j]]
@@ -223,8 +222,7 @@ objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
 
-    penalty = gamma * sum((colSums(nvec/ntotal * do.call(rbind, lambda.list)) - 1)^2)  # *ntotal /ntotal
-    obj = sum(do.call(c, obj.list))/ntotal + penalty
+    obj = sum(do.call(c, obj.list))/ntotal
 
     return(obj)
 }
@@ -242,25 +240,23 @@ objective_func <- function(X.list, W, lambda.list, H.list, b.list, gamma) {
 #' @param lambda.list A list of scaling vector of size p (ngenes).
 #' @param H.list A list of factor loading matrix of size ncells-by-r
 #' @param b.list A list of shift vector of size p (ngenes).
-#' @param gamma numeric scalar, parameter for the penalty term.
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return a list containing updated parameters: W, H.list, lambda.list,  b.list
 #' @export
-solve_subproblem <- function(params.to.update = c("W", "lambda", "b", "H"), X.list,
-    W, H.list, b.list, lambda.list, gamma, verbose = T) {
+solve_subproblem <- function(params.to.update = c("W", "lambda", "H"), X.list,
+    W, H.list, b.list, lambda.list, verbose = T) {
     params.to.update = match.arg(params.to.update)
     m = length(X.list)
 
     if (params.to.update == "W") {
         W = solve_W(X.list = X.list, H.list = H.list, lambda.list = lambda.list,
             b.list = b.list)
+        b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W = W, H = H.list[[j]],
+                                                 lambd = lambda.list[[j]]))
     } else if (params.to.update == "lambda") {
         lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list,
-            b.list = b.list, gamma = gamma)
-    } else if (params.to.update == "b") {
-        b.list = lapply(1:m, function(j) solve_b(X.list[[j]], W = W, H = H.list[[j]],
-            lambd = lambda.list[[j]]))
+            b.list = b.list)
     } else {
         H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]],
             b = b.list[[j]]))
@@ -306,15 +302,13 @@ initialize_params_random <- function(X.list, r, seed = 0) {
 #' @param X.list a list of ncells-by-ngenes gene expression matrix
 #' @param r scalar, dimensional of common factor matrix, which can be chosen as the rough number of
 #' identifiable cells types in the joint population (default 15).
-#' @param gamma numeric scalar, parameter for the penalty term. It is sufficient to chose a large
-#' value (default 1e6)
 #' @param W ngenes-by-r numeric matrix. Supplied if parameter initialization is provided (default NULL).
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
 #'
 #' @return a list containing initialized parameters: W, H.list, lambda.list,  b.list
 #' @import parallel checkmate
 #' @export
-initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
+initialize_params <- function(X.list, r, W = NULL, verbose = TRUE) {
     m = length(X.list)
     p = ncol(X.list[[1]])
 
@@ -357,8 +351,7 @@ initialize_params <- function(X.list, r, gamma, W = NULL, verbose = TRUE) {
 
     # initialize lambda
     b.list.init = lapply(1:m, function(j) rep(0, p))
-    lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list.init,
-        gamma = gamma)
+    lambda.list = solve_lambda_list(X.list = X.list, W = W, H.list = H.list, b.list = b.list.init)
 
     # initialize b
     b.list = lapply(1:m, function(j) solve_b(X = X.list[[j]], W = W, H = H.list[[j]],
@@ -433,45 +426,54 @@ solve_W <- function(X.list, H.list, lambda.list, b.list) {
 
 #' Solve for dataset specific scalings lambda.list
 #'
-#' \deqn{argmin_{lambda_j>=0} ||X- HW^T diag(lambda_j) - 1_n b^T||_F^2 +
-#' gamma * N * sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}
+#' \deqn{argmin_{lambda_j>=0} ||X- HW^T diag(lambda_j) - 1_n b^T||_F^2}
 #'
 #' @param X.list A list of ncells-by-ngenes gene expression matrix.
 #' @param H.list A list of factor loading matrix of size ncells-by-r
 #' @param W ngenes-by-r non-negative common factor matrix
 #' @param b.list A list of shift vector of size p (ngenes).
-#' @param gamma numeric scalar, parameter for the penalty term.
 #'
 #' @return lambda.list A list of m scaling vector of size p (ngenes).
 #' @import checkmate parallel
 #' @importFrom lsei nnls
 #'
 #' @export
-solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
+solve_lambda_list <- function(X.list, W, H.list, b.list) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
     m = length(nvec)
+    p = nrow(W)
 
     if (m > 1) {
-        lambda.out = future.apply::future_lapply(1:nrow(W), function(l) {
-            Ajl.list = lapply(1:m, function(j) {
-                H.list[[j]] %*% W[l, ]  # nj * 1
+        lambda.list = lapply(1:m, function(j){
+            lambd = future.apply::future_sapply(1:p, function(l) {
+                y = X.list[[j]][, l] - b.list[[j]][l]
+                x = H.list[[j]] %*% W[l, ]
+                xx = sum(x * x)
+                xy = sum(x * y)
+                if (xx == 0 | xy < 0) {
+                    return(0)
+                }
+                return(xy / xx)
             })
-            Bjl.list = lapply(1:m, function(j) {
-                X.list[[j]][, l] - b.list[[j]][l]
-            })
-
-            Amat <- diag(sapply(Ajl.list, function(Ajl) sum(Ajl^2))) + gamma * matrix(nvec,
-                ncol = 1) %*% matrix(nvec, nrow = 1)/ntotal
-            Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]])) +
-                gamma * nvec
-
-            lambd = lsei::nnls(a = Amat, b = Bvec)$x
-            lambd[is.na(lambd)] = 0
-
-            lambd
         })
-        lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
+
+        # calculate the scaling for each gene
+        scale.per.gene = sapply(1:p, function(l) {
+            lambdas = sapply(1:m, function(j) lambda.list[[j]][l])
+            lambda.sums = sum(lambdas * nvec)
+            if (lambda.sums == 0){
+                return(1)
+            }
+            return(ntotal / lambda.sums)
+        })
+
+        # rescaled lambda.list
+        lambda.list = lapply(lambda.list, function(lambd) {
+            lambd = lambd * scale.per.gene
+            # lambd[is.na(lambd)] = 1
+            return(lambd)
+        })
     } else {
         # only one dataset
         lambda.list = list(rep(1, nrow(W)))
@@ -488,16 +490,18 @@ solve_lambda_list <- function(X.list, W, H.list, b.list, gamma) {
 #' @param W ngenes-by-r non-negative common factor matrix
 #' @param H ncells-by-r nonnegative factor loading matrix
 #' @param lambd numeric scalar, scaling associated with the dataset
+#' @param b.gamma tunning parameter for the L2 panelty on b.gamma.
 #'
 #' @return b shift vector of size p (ngenes).
 #'
 #' @import parallel
 #' @export
-solve_b <- function(X, W, H, lambd) {
+solve_b <- function(X, W, H, lambd, b.gamma = 0.1) {
 
     b = do.call(c, future.apply::future_lapply(1:nrow(W), function(l) {
-        max(0, mean(X[, l] - H %*% W[l, ] * lambd[l]))
+        mean(X[, l] - H %*% W[l, ] * lambd[l])/ (1+b.gamma)
     }))
+    # b = rep(0, nrow(W))
 
     return(b)
 }

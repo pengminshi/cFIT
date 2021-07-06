@@ -8,9 +8,6 @@
 #' @param r scalar, dimension of common factor matrix, which can be chosen as the rough number of
 #' identifiable cells types in the joint population (default 15).
 #' @param max.niter integer, max number of iterations (default 100).
-#' @param tol numeric scalar, tolerance used in stopping criteria (default 1e-5).
-#' @param gamma numeric scalar, parameter for the penalty term. It is sufficient to chose a large
-#' value (default 1e6)
 #' @param nrep integer, number of repeated runs (to reduce effect of local optimum, default 1)
 #' @param init a list of parameters for parameter initialization. The list either contains all
 #' parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provided (default NULL).
@@ -18,8 +15,10 @@
 #' accurate results. By default the value is set to  \code{min(5*10^4/ntotal, 1)}
 #' @param weight.list weights for performing weighted subsampling sketching. Note that the weight.list is a list of weights
 #' per batch. The weights for each batch is a vector of nonnegative values of the same size as the number of cells in the batch.
-#' To use the Statistical leverage score as weights, run
-#' @param future.plan plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.
+#' @param tol numeric scalar, tolerance used in stopping criteria (default 1e-5).
+#' @param early.stopping Stop early if no improvement of objective function for this number of iterations.
+#' @param time.out Stop after the number of minutes running.
+#' @param future.plan plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Default is 'sequential'. Note that Rstudio does not support 'multicore'.
 #' @param workers additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.
 #' \code{weight.list = lapply(1:length(X.list), function(j) statistical_leverage_score(X.list[[j]], k=r))}
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
@@ -36,16 +35,17 @@
 #'  \item{deltaw}{numeric, the relative change in W (common factor matrix) measured by Frobenious norm}
 #'  \item{deltaw.history}{a vector of numeric values, the relative change in W (common factor matrix) per iteration.}
 #'  \item{niter}{integer, the iteration at convergence (or maximum iteration if not converge)}
-#'  \item{params}{list of parameters used for the algorithm: gamma, max.iter, tol, nrep, subsample.prop, weight.list}
+#'  \item{params}{list of parameters used for the algorithm: max.iter, tol, nrep, subsample.prop, weight.list}
 #' }
 #'
 #' @import checkmate parallel
 #' @export
-CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
-    gamma = 1e+06, nrep = 1, init = NULL, subsample.prop = NULL, weight.list = NULL,
-    future.plan=c('multicore','sequential','transparent','multisession','cluster'),
-    workers = parallel::detectCores() - 1,
-    verbose = T, seed = 0) {
+CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100,
+                                   nrep = 1, init = NULL, subsample.prop = NULL, weight.list = NULL,
+                                   tol = 1e-06, early.stopping = 50,  time.out = 60*2,
+                                   future.plan=c('sequential','transparent','multicore','multisession','cluster'),
+                                   workers = parallel::detectCores() - 1,
+                                   verbose = T, seed = 0) {
 
     env.plan = future::plan()
     future.plan = match.arg(future.plan)
@@ -54,7 +54,7 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
     if (verbose){
         logmsg("Run cFIT with ", future.plan,  " plan ...")
         if (future.plan %in% c('multicore', 'multisession', 'cluster')){
-            logmsg('Worker: ', workers)
+            logmsg('Number of workers: ', workers)
         }
     }
     m = length(X.list)
@@ -81,9 +81,18 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
     # total number of samples
     ntotal = sum(sapply(1:m, function(j) nrow(X.list[[j]])))
 
+    frac.x.obj = min(2000, ntotal) / ntotal
+    X.list.obj = lapply(X.list, function(x) {
+        x[1:(nrow(x)*frac.x.obj),]
+    })  # the subset of samples to calculate the objective function
+    if (verbose){
+        nb.x.obj = sum(sapply(X.list.obj, function(x) nrow(x)))
+        logmsg('Use ', nb.x.obj, ' samples to calculate the objective function...')
+    }
+
     # proportion to be subsampled for updates
     if (is.null(subsample.prop)) {
-        subsample.prop = min(5 * 10^4/ntotal, 1)
+        subsample.prop = min(10^4/ntotal, 1)
         logmsg("Use subsample proportion ", subsample.prop)
     }
 
@@ -116,20 +125,19 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
             if (verbose)
                 logmsg("Initialize W, H, b, Lambda ...")
 
-            if (!is.null(weight.list)) {
-                X.list.sub = subsample(X.list, subsample.prop, weight.list = weight.list)
-            } else {
-                X.list.sub = subsample(X.list, subsample.prop)
-            }
+            # subsample.prop.init = max(min(10^4/ntotal, 1), subsample.prop) # use a larger fraction for the first iteration
+            # if(verbose){
+            #     logmsg("Use ", subsample.prop.init, " fraction for initialization ...")
+            # }
+            X.list.sub = subsample(X.list, subsample.prop, weight.list = weight.list)
 
-            params.list = initialize_params(X.list = X.list.sub, r = r, gamma = gamma,
-                W = init$W, verbose = verbose)
-            # params.list = initialize_params_random(X.list = X.list, r = r) # random
             # initialization
+            params.list = initialize_params(X.list = X.list.sub, r = r, W = init$W, verbose = verbose)
+            # params.list = initialize_params_random(X.list = X.list, r = r) # random
         }
 
-        obj = objective_func(X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list,
-            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma)
+        obj = objective_func(X.list = X.list.obj, W = params.list$W, H.list = NULL,
+                             lambda.list = params.list$lambda.list, b.list = params.list$b.list)
         if (verbose)
             logmsg("Objective for initialization = ", obj)
 
@@ -137,50 +145,81 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
         converge = F
         obj.history = obj
         deltaw.history = NULL
+        time.elapse.history = difftime(time1 = Sys.time(), time2 = time.start, units = "min")
+
+        if (!is.null(early.stopping)){
+            early.stop.count = 0    # accumulator for early stopping
+            early.stop.obj = Inf    # best objective so far
+        }
 
         # solve 4 set of parameters iteratively
         for (iter in 1:max.niter) {
 
             w.old = params.list$W
+            obj.old = obj
             params.list.last = params.list
 
-            if (!is.null(weight.list)) {
-                X.list.sub = subsample(X.list, subsample.prop, weight.list = weight.list)
-            } else {
-                X.list.sub = subsample(X.list, subsample.prop)
-            }
+            X.list.sub = subsample(X.list, subsample.prop, weight.list = weight.list)
 
             # estimate the membership matrix first random permute update order for the other
             # three sets of parameters
-            params.to.update.list = c("H", sample(c("W", "lambda", "b"), replace = F))
+            params.to.update.list = c("H", sample(c("W", "lambda"), replace = F))
             if (verbose)
                 logmsg("iter ", iter, ", update by: ", paste(params.to.update.list,
                   collapse = "->"))
 
             for (params.to.update in params.to.update.list) {
-                # logmsg('test ----- > str(param.list)', str(params.list))
                 params.list = solve_subproblem_penalized(params.to.update = params.to.update,
                   X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list,
                   b.list = params.list$b.list, lambda.list = params.list$lambda.list,
-                  gamma = gamma, iter = iter, params.list.last = params.list.last,
+                  iter = iter, params.list.last = params.list.last,
                   verbose = verbose)
             }
-            # logmsg('test----> str(params.list)', str(params.list))
-            obj = objective_func(X.list = X.list.sub, W = params.list$W, H.list = params.list$H.list,
-                lambda.list = params.list$lambda.list, b.list = params.list$b.list,
-                gamma = gamma)
+
+            obj = objective_func(X.list = X.list.obj, W = params.list$W, H.list = NULL,
+                                 lambda.list = params.list$lambda.list, b.list = params.list$b.list)
             obj.history = c(obj.history, obj)
-            # relative difference of objective function
+
             deltaw = norm(params.list$W - w.old)/norm(w.old)
             deltaw.history = c(deltaw.history, deltaw)
+
+            time.elapse.history = c(time.elapse.history, difftime(time1 = Sys.time(), time2 = time.start, units = "min"))
+
+            # relative difference of objective function
+            delta = abs(obj - obj.old)/mean(c(obj, obj.old))
+
             if (verbose)
-                logmsg("iter ", iter, ", objective=", obj, ", delta_w=", deltaw)
+                logmsg("iter ", iter, ", objective=", obj, ", delta_w=", deltaw, ", delta(obj) = ", delta)
 
             # check if converge
-            if (deltaw < tol) {
-                logmsg("Converge at iter ", iter, ", deltaw = ", deltaw)
+            if (delta < tol) {
+                logmsg("Converge at iter ", iter, "!")
                 converge = T
                 break
+            }
+
+            # check the condition for early stopping
+            if (!is.null(early.stopping)){
+                if (obj < early.stop.obj){
+                    early.stop.obj = obj
+                    early.stop.count = 0
+                } else {
+                    early.stop.count = early.stop.count + 1
+                }
+
+                if (early.stop.count > early.stopping){
+                    logmsg("Early stopping at iter ", iter, "!")
+                    converge = T
+                    break
+                }
+            }
+
+            if(!is.null(time.out)){
+                if (difftime(time1 = Sys.time(), time2 = time.start, units = "min") > time.out){
+                    logmsg("Time.out at iter ", iter, "!")
+                    converge = F
+                    break
+                }
             }
         }
         if (verbose){
@@ -188,7 +227,7 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
         }
         params.list = solve_subproblem(params.to.update = "H", X.list = X.list, W = params.list$W,
             H.list = params.list$H.list, b.list = params.list$b.list, lambda.list = params.list$lambda.list,
-            gamma = gamma, verbose = verbose)
+            verbose = verbose)
 
         if (!is.null(rownames(X.list[[1]]))) {
             params.list$H.list = lapply(1:m, function(j) {
@@ -199,10 +238,8 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
             rownames(params.list$W) = colnames(X.list[[1]])
         }
         if (verbose){
-            logmsg("Objective using all samples")
+            logmsg("Calculate the obj using all samples...")
         }
-        obj = objective_func(X.list = X.list, W = params.list$W, H.list = params.list$H.list,
-            lambda.list = params.list$lambda.list, b.list = params.list$b.list, gamma = gamma)
 
         if (obj < obj.best) {
             # update to save the best results
@@ -212,6 +249,7 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
             niter.best = iter
             deltaw.best = deltaw
             deltaw.history.best = deltaw.history
+            time.elapse.history.best = time.elapse.history
             converge.best = converge
             seed.best = seed + rep - 1
         }
@@ -221,15 +259,18 @@ CFITIntegrate_sketched <- function(X.list, r = 15, max.niter = 100, tol = 1e-04,
     if (verbose) {
         logmsg("Finised in ", time.elapsed, " ", units(time.elapsed), "\nBest result with seed ",
             seed.best, ":\nConvergence status: ", converge.best, " at ", niter.best,
-            " iterations\nFinal objective delta:", deltaw.best)
+            " iterations.")
     }
+    obj = objective_func(X.list = X.list, W = params.list.best$W, H.list = params.list.best$H.list,
+                         lambda.list = params.list.best$lambda.list, b.list = params.list.best$b.list)
 
     future::plan(env.plan)
     return(list(H.list = params.list.best$H.list, W = params.list.best$W, b.list = params.list.best$b.list,
-        lambda.list = params.list.best$lambda.list, convergence = converge.best,
-        obj = obj.best, obj.history = obj.history.best, deltaw = deltaw.best, deltaw.history = deltaw.history.best,
-        niter = niter.best, params = list(gamma = gamma, max.niter = max.niter, tol = tol,
-            nrep = nrep, subsample.prop = subsample.prop, weight.list = weight.list)))
+                lambda.list = params.list.best$lambda.list, convergence = converge.best,
+                obj = obj.best, obj.history = obj.history.best, deltaw = deltaw.best, deltaw.history = deltaw.history.best,
+                niter = niter.best, time.elapsed = time.elapsed, time.elapse.history = time.elapse.history.best,
+                params = list( max.niter = max.niter, tol = tol, nrep = nrep,
+                               subsample.prop = subsample.prop, weight.list = weight.list)))
 }
 
 
@@ -279,7 +320,6 @@ subsample <- function(X.list, subsample.prop, min.samples = 20, weight.list = NU
 #' @param lambda.list A list of scaling vector of size p (ngenes).
 #' @param H.list A list of factor loading matrix of size ncells-by-r
 #' @param b.list A list of shift vector of size p (ngenes).
-#' @param gamma numeric scalar, parameter for the penalty term.
 #' @param iter integer, the current iteration
 #' @param params.list.last The parameters from last iteration, for SPP
 #' @param verbose boolean scalar, whether to show extensive program logs (default TRUE)
@@ -287,21 +327,24 @@ subsample <- function(X.list, subsample.prop, min.samples = 20, weight.list = NU
 #' @return a list containing updated parameters: W, H.list, lambda.list,  b.list
 #'
 #' @export
-solve_subproblem_penalized <- function(params.to.update = c("W", "lambda", "b", "H"),
-    X.list, W, H.list, b.list, lambda.list, gamma, iter, params.list.last, verbose = T) {
+solve_subproblem_penalized <- function(params.to.update = c("W", "lambda", "H"),
+    X.list, W, H.list, b.list, lambda.list, iter, params.list.last, verbose = T) {
     params.to.update = match.arg(params.to.update)
     m = length(X.list)
 
     if (params.to.update == "W") {
         W = solve_W_penalized(X.list = X.list, H.list = H.list, lambda.list = lambda.list,
             b.list = b.list, W.old = params.list.last$W, iter = iter)
+        b.list = lapply(1:m, function(j) solve_b_penalized(X.list[[j]], W = W, H = H.list[[j]],
+                                                           lambd = lambda.list[[j]], b.old = params.list.last$b.list[[j]],
+                                                           iter = iter))
     } else if (params.to.update == "lambda") {
         lambda.list = solve_lambda_list_penalized(X.list = X.list, W = W, H.list = H.list,
-            b.list = b.list, gamma = gamma, lambda.list.old = params.list.last$lambda.list,
+            b.list = b.list, lambda.list.old = params.list.last$lambda.list,
             iter = iter)
-    } else if (params.to.update == "b") {
-        b.list = lapply(1:m, function(j) solve_b_penalized(X.list[[j]], W = W, H = H.list[[j]],
-            lambd = lambda.list[[j]], b.old = params.list.last$b.list[[j]], iter = iter))
+    # } else if (params.to.update == "b") {
+    #     b.list = lapply(1:m, function(j) solve_b_penalized(X.list[[j]], W = W, H = H.list[[j]],
+    #         lambd = lambda.list[[j]], b.old = params.list.last$b.list[[j]], iter = iter))
     } else {
         H.list = lapply(1:m, function(j) solve_H(X = X.list[[j]], W = W, lambd = lambda.list[[j]],
             b = b.list[[j]]))
@@ -343,7 +386,7 @@ solve_W_penalized <- function(X.list, H.list, lambda.list, b.list, W.old, iter) 
         }))  # n * 1
 
         # add the panelty
-        mu = iter * 0.1  # penalty parameter
+        mu = step_size(iter)  # penalty parameter
         A = rbind(A * sqrt(1/n), sqrt(mu/r) * diag(rep(1, r)))
         B = c(B * sqrt(1/n), W.old[l, ] * sqrt(mu/r))
 
@@ -362,7 +405,6 @@ solve_W_penalized <- function(X.list, H.list, lambda.list, b.list, W.old, iter) 
 #' @param H.list A list of factor loading matrix of size ncells-by-r
 #' @param W ngenes-by-r non-negative common factor matrix
 #' @param b.list A list of shift vector of size p (ngenes).
-#' @param gamma numeric scalar, parameter for the penalty term.
 #' @param lambda.list.old lambda.list from last iteration
 #' @param iter current iteration, for calculating the step size.
 #'
@@ -370,44 +412,85 @@ solve_W_penalized <- function(X.list, H.list, lambda.list, b.list, W.old, iter) 
 #' @import checkmate parallel
 #' @importFrom lsei nnls
 #' @export
-solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda.list.old,
-    iter) {
+solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, lambda.list.old, iter) {
     nvec = sapply(X.list, nrow)
     ntotal = sum(nvec)
     m = length(nvec)
-    lambda.old.mat = do.call(rbind, lambda.list.old)  # m * p
+    p = nrow(W)
 
     if (m > 1) {
-        lambda.out = future.apply::future_lapply(1:nrow(W), function(l) {
-            Ajl.list = lapply(1:m, function(j) {
-                H.list[[j]] %*% W[l, ]  # nj * 1
+        mu = step_size(iter)
+        lambda.list = lapply(1:m, function(j){
+            lambd = future.apply::future_sapply(1:p, function(l) {
+                y = X.list[[j]][, l] - b.list[[j]][l]
+                x = H.list[[j]] %*% W[l, ]
+                xx = sum(x * x) + mu * nvec[j]
+                xy = sum(x * y) + mu * nvec[j] * lambda.list.old[[j]][l]
+                if ( xy < 0 ) {
+                    return(0)
+                }
+                return(xy / xx)
             })
-            Bjl.list = lapply(1:m, function(j) {
-                X.list[[j]][, l] - b.list[[j]][l]
-            })
-
-            Amat <- diag(sapply(Ajl.list, function(Ajl) sum(Ajl^2))) + gamma * matrix(nvec,
-                ncol = 1) %*% matrix(nvec, nrow = 1)/ntotal  # m*m matrix
-            Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]])) +
-                gamma * nvec
-
-            # add penalty
-            mu = iter * 0.1
-            Amat = rbind(Amat, mu * diag(rep(1, m)))
-            Bvec = c(Bvec, mu * lambda.old.mat[, l])
-
-            lambd = lsei::nnls(a = Amat, b = Bvec)$x
-            lambd[is.na(lambd)] = 0
-
-            lambd
         })
-        lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
+
+        # calculate the scaling for each gene
+        scale.per.gene = sapply(1:p, function(l) {
+            lambdas = sapply(1:m, function(j) lambda.list[[j]][l])
+            lambda.sums = sum(lambdas * nvec)
+            if (lambda.sums == 0){
+                return(1)
+            }
+            return(ntotal / lambda.sums)
+        })
+
+        # rescaled lambda.list
+        lambda.list = lapply(lambda.list, function(lambd) {
+            lambd * scale.per.gene
+        })
     } else {
         # only one dataset
         lambda.list = list(rep(1, nrow(W)))
     }
     return(lambda.list)
 }
+# solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda.list.old,
+#     iter) {
+#     nvec = sapply(X.list, nrow)
+#     ntotal = sum(nvec)
+#     m = length(nvec)
+#     lambda.old.mat = do.call(rbind, lambda.list.old)  # m * p
+#
+#     if (m > 1) {
+#         lambda.out = future.apply::future_lapply(1:nrow(W), function(l) {
+#             Ajl.list = lapply(1:m, function(j) {
+#                 H.list[[j]] %*% W[l, ]  # nj * 1
+#             })
+#             Bjl.list = lapply(1:m, function(j) {
+#                 X.list[[j]][, l] - b.list[[j]][l]
+#             })
+#
+#             Amat <- diag(sapply(Ajl.list, function(Ajl) sum(Ajl^2))) + gamma * matrix(nvec,
+#                 ncol = 1) %*% matrix(nvec, nrow = 1)/ntotal  # m*m matrix
+#             Bvec <- sapply(1:m, function(j) sum(Ajl.list[[j]] * Bjl.list[[j]])) +
+#                 gamma * nvec
+#
+#             # add penalty
+#             mu = step_size(iter)
+#             Amat = rbind(Amat, mu * diag(rep(1, m)))
+#             Bvec = c(Bvec, mu * lambda.old.mat[, l])
+#
+#             lambd = lsei::nnls(a = Amat, b = Bvec)$x
+#             lambd[is.na(lambd)] = 0
+#
+#             lambd
+#         })
+#         lambda.list = lapply(1:m, function(j) sapply(lambda.out, function(lambd) lambd[j]))
+#     } else {
+#         # only one dataset
+#         lambda.list = list(rep(1, nrow(W)))
+#     }
+#     return(lambda.list)
+# }
 
 
 #' Solve for dataset specific shift b with Stochastic Porximal Point method
@@ -418,28 +501,22 @@ solve_lambda_list_penalized <- function(X.list, W, H.list, b.list, gamma, lambda
 #' @param lambd numeric scalar, scaling associated with the dataset
 #' @param b.old b vector  from last iteration
 #' @param iter current iteration, for calculating the step size.
+#' @param b.gamma tunning parameter for the L2 panelty on b.gamma.
 #'
 #' @return b shift vector of size p (ngenes).
 #' @import parallel
 #' @importFrom lsei nnls
 #' @export
-solve_b_penalized <- function(X, W, H, lambd, b.old, iter) {
-
-    n = nrow(X)
+solve_b_penalized <- function(X, W, H, lambd, b.old, iter, b.gamma = 0.1) {
+    mu = step_size(iter)
     b = do.call(c, future.apply::future_lapply(1:nrow(W), function(l) {
-        A = matrix(1, nrow = n, ncol = 1)
-        B = X[, l] - H %*% W[l, ] * lambd[l]
-
-        # add penalty
-        mu = iter * 0.1
-        A = rbind(A/sqrt(n), 1 * mu)
-        B = c(B/sqrt(n), b.old[l] * mu)
-
-        lsei::nnls(a = A, b = B)$x
+        y.mean = mean(X[, l] - H %*% W[l, ] * lambd[l])
+        (y.mean + mu * b.old[l])/ (1+b.gamma+mu)
     }))
 
     return(b)
 }
+
 
 #' Calculate the statistical leverage score
 #'
@@ -463,3 +540,10 @@ statistical_leverage_score <- function(A, k = NULL) {
     return(score)
 }
 
+#' Step size controller
+#'
+#' @param iter current iteration t
+#' @param mu initial penalty when t=1
+step_size <- function(iter, mu=0.005){
+    return(mu * iter^(1))
+}

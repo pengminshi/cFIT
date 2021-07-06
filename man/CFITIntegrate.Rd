@@ -9,10 +9,9 @@ CFITIntegrate(
   r = 15,
   max.niter = 100,
   tol = 1e-05,
-  gamma = 1e+06,
   nrep = 1,
   init = NULL,
-  future.plan = c("multicore", "sequential", "transparent", "multisession", "cluster"),
+  future.plan = c("sequential", "transparent", "multicore", "multisession", "cluster"),
   workers = parallel::detectCores() - 1,
   verbose = T,
   seed = 0
@@ -28,15 +27,12 @@ identifiable cells types in the joint population (default 15).}
 
 \item{tol}{numeric scalar, tolerance used in stopping criteria (default 1e-5).}
 
-\item{gamma}{numeric scalar, parameter for the penalty term. It is sufficient to chose a large
-value (default 1e6)}
-
 \item{nrep}{integer, number of repeated runs (to reduce effect of local optimum, default 1)}
 
 \item{init}{a list of parameters for parameter initialization. The list either contains all
 parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provided (default NULL).}
 
-\item{future.plan}{plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.}
+\item{future.plan}{plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Default is 'sequential'. Note that Rstudio does not support 'multicore'.}
 
 \item{workers}{additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.}
 
@@ -54,11 +50,10 @@ a list containing  \describe{
 \item{obj}{numeric scalar, value of the objective function at convergence or when maximum iteration achieved}
 \item{niter}{integer, the iteration at convergence (or maximum iteration if not converge)}
 \item{delta}{numeric scalar, the relative difference in last objective update}
-\item{params}{list of parameters used for the algorithm: gamma, max.iter, tol, nrep}
+\item{params}{list of parameters used for the algorithm: max.iter, tol, nrep}
 }
 }
 \description{
 Solve the model parameters through Iterative Nonnegative Matrix Factorization (iNMF),
-by minimizing the objective function \deqn{1/N \sum_j||X_j -(H_JW^T\Lambda_j  + 1_nj b_j^T)||_F^2 +
-gamma \sum_{l=1}^p(\sum_{j=1}^mnj/N \lambda_{jl}-1)^2}.
+by minimizing the objective function \deqn{1/N \sum_j||X_j -(H_jW^T\Lambda_j  + 1_{n_j} b_j^T)||_F^2} with penalties.
 }

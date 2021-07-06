@@ -4,7 +4,7 @@
 \alias{solve_b_penalized}
 \title{Solve for dataset specific shift b with Stochastic Porximal Point method}
 \usage{
-solve_b_penalized(X, W, H, lambd, b.old, iter)
+solve_b_penalized(X, W, H, lambd, b.old, iter, b.gamma = 0.1)
 }
 \arguments{
 \item{X}{ncells-by-ngenes gene expression matrix}
@@ -18,6 +18,8 @@ solve_b_penalized(X, W, H, lambd, b.old, iter)
 \item{b.old}{b vector  from last iteration}
 
 \item{iter}{current iteration, for calculating the step size.}
+
+\item{b.gamma}{tunning parameter for the L2 panelty on b.gamma.}
 }
 \value{
 b shift vector of size p (ngenes).

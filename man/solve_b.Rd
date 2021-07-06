@@ -4,7 +4,7 @@
 \alias{solve_b}
 \title{Solve for dataset specific shift b}
 \usage{
-solve_b(X, W, H, lambd)
+solve_b(X, W, H, lambd, b.gamma = 0.1)
 }
 \arguments{
 \item{X}{ncells-by-ngenes gene expression matrix}
@@ -14,6 +14,8 @@ solve_b(X, W, H, lambd)
 \item{H}{ncells-by-r nonnegative factor loading matrix}
 
 \item{lambd}{numeric scalar, scaling associated with the dataset}
+
+\item{b.gamma}{tunning parameter for the L2 panelty on b.gamma.}
 }
 \value{
 b shift vector of size p (ngenes).

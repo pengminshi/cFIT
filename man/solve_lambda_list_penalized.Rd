@@ -4,15 +4,7 @@
 \alias{solve_lambda_list_penalized}
 \title{Solve for dataset specific scalings lambda.list with Stochastic Porximal Point method}
 \usage{
-solve_lambda_list_penalized(
-  X.list,
-  W,
-  H.list,
-  b.list,
-  gamma,
-  lambda.list.old,
-  iter
-)
+solve_lambda_list_penalized(X.list, W, H.list, b.list, lambda.list.old, iter)
 }
 \arguments{
 \item{X.list}{A list of ncells-by-ngenes gene expression matrix.}
@@ -22,8 +14,6 @@ solve_lambda_list_penalized(
 \item{H.list}{A list of factor loading matrix of size ncells-by-r}
 
 \item{b.list}{A list of shift vector of size p (ngenes).}
-
-\item{gamma}{numeric scalar, parameter for the penalty term.}
 
 \item{lambda.list.old}{lambda.list from last iteration}
 

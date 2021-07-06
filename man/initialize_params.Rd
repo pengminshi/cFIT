@@ -4,16 +4,13 @@
 \alias{initialize_params}
 \title{Initialize parameters for data integration or transfer}
 \usage{
-initialize_params(X.list, r, gamma, W = NULL, verbose = TRUE)
+initialize_params(X.list, r, W = NULL, verbose = TRUE)
 }
 \arguments{
 \item{X.list}{a list of ncells-by-ngenes gene expression matrix}
 
 \item{r}{scalar, dimensional of common factor matrix, which can be chosen as the rough number of
 identifiable cells types in the joint population (default 15).}
-
-\item{gamma}{numeric scalar, parameter for the penalty term. It is sufficient to chose a large
-value (default 1e6)}
 
 \item{W}{ngenes-by-r numeric matrix. Supplied if parameter initialization is provided (default NULL).}
 

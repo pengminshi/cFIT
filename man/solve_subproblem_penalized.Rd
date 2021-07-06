@@ -5,13 +5,12 @@
 \title{Solve subproblems via coordinate descent with Stochastic proximal point method}
 \usage{
 solve_subproblem_penalized(
-  params.to.update = c("W", "lambda", "b", "H"),
+  params.to.update = c("W", "lambda", "H"),
   X.list,
   W,
   H.list,
   b.list,
   lambda.list,
-  gamma,
   iter,
   params.list.last,
   verbose = T
@@ -30,8 +29,6 @@ specifying which set of parameters to update}
 \item{b.list}{A list of shift vector of size p (ngenes).}
 
 \item{lambda.list}{A list of scaling vector of size p (ngenes).}
-
-\item{gamma}{numeric scalar, parameter for the penalty term.}
 
 \item{iter}{integer, the current iteration}
 

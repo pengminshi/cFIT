@@ -8,13 +8,14 @@ CFITIntegrate_sketched(
   X.list,
   r = 15,
   max.niter = 100,
-  tol = 1e-04,
-  gamma = 1e+06,
   nrep = 1,
   init = NULL,
   subsample.prop = NULL,
   weight.list = NULL,
-  future.plan = c("multicore", "sequential", "transparent", "multisession", "cluster"),
+  tol = 1e-06,
+  early.stopping = 50,
+  time.out = 60 * 2,
+  future.plan = c("sequential", "transparent", "multicore", "multisession", "cluster"),
   workers = parallel::detectCores() - 1,
   verbose = T,
   seed = 0
@@ -28,11 +29,6 @@ identifiable cells types in the joint population (default 15).}
 
 \item{max.niter}{integer, max number of iterations (default 100).}
 
-\item{tol}{numeric scalar, tolerance used in stopping criteria (default 1e-5).}
-
-\item{gamma}{numeric scalar, parameter for the penalty term. It is sufficient to chose a large
-value (default 1e6)}
-
 \item{nrep}{integer, number of repeated runs (to reduce effect of local optimum, default 1)}
 
 \item{init}{a list of parameters for parameter initialization. The list either contains all
@@ -42,10 +38,15 @@ parameter sets: W,lambda.list, b.list, H.list, or only W will be used if provide
 accurate results. By default the value is set to  \code{min(5*10^4/ntotal, 1)}}
 
 \item{weight.list}{weights for performing weighted subsampling sketching. Note that the weight.list is a list of weights
-per batch. The weights for each batch is a vector of nonnegative values of the same size as the number of cells in the batch.
-To use the Statistical leverage score as weights, run}
+per batch. The weights for each batch is a vector of nonnegative values of the same size as the number of cells in the batch.}
 
-\item{future.plan}{plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Note that Rstudio does not support 'multicore'.}
+\item{tol}{numeric scalar, tolerance used in stopping criteria (default 1e-5).}
+
+\item{early.stopping}{Stop early if no improvement of objective function for this number of iterations.}
+
+\item{time.out}{Stop after the number of minutes running.}
+
+\item{future.plan}{plan for future parallel computation, can be chosen from 'sequential','transparent','multicore','multisession' and 'cluster'. Default is 'sequential'. Note that Rstudio does not support 'multicore'.}
 
 \item{workers}{additional parameter for \code{future::plan()}, in cases of 'multicore','multisession' and 'cluster'.
 \code{weight.list = lapply(1:length(X.list), function(j) statistical_leverage_score(X.list[[j]], k=r))}}
@@ -66,7 +67,7 @@ a list containing  \describe{
 \item{deltaw}{numeric, the relative change in W (common factor matrix) measured by Frobenious norm}
 \item{deltaw.history}{a vector of numeric values, the relative change in W (common factor matrix) per iteration.}
 \item{niter}{integer, the iteration at convergence (or maximum iteration if not converge)}
-\item{params}{list of parameters used for the algorithm: gamma, max.iter, tol, nrep, subsample.prop, weight.list}
+\item{params}{list of parameters used for the algorithm: max.iter, tol, nrep, subsample.prop, weight.list}
 }
 }
 \description{

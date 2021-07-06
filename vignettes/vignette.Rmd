@@ -41,6 +41,7 @@ Our proposed method models the shared information between various data sets by a
 First load the package
 ```{r, eval=T}
 library(cFIT)
+options(warn = -1)
 ```
 
 We illustrate the standard workflow of data integration as well as data transfer, using well analyzed pancreas islet cells dara sets, retrieved from `SeuratData` package (@stuart2019comprehensive).
@@ -83,13 +84,19 @@ Preprocess to normalize by library size and log transform
 # data preprocessing
 exprs.list = preprocess_for_integration(data.list$X.list, genes, scale.factor=10^4, scale=T, center=F)
 ```
+We first integrate data sets from four technologies (inDrop, celseq, celseq2, SmartSeq2), and then transfer the learned factor matrix to the smallest dataset--fluidigmc1.
 
-Perform data integration with `CFITIntegrate`. The only parameter to adjust is `r`, which is the number of factors of the common factor matrix (shared across datasets). The algorithm is relatively robust to `r` as long as r approximate the number of underlying distinct cell types across all data sets. Other minor parameters that can be adjusted is `max.niter` (100 by default), `tol` tolerance used in stopping criteria (1e-5 by default), `gamma` tunning of the penalty term (1e6 by default), `nrep` number of repeats of the run (1 by default, require much longer if increased), `init` parameter initialization (NULL).
+Perform data integration with `CFITIntegrate`. The only parameter to adjust is `r`, which is the number of factors of the common factor matrix (shared across datasets). The algorithm is relatively robust to `r` as long as r approximate the number of underlying distinct cell types across all data sets. Other minor parameters that can be adjusted is `max.niter` (100 by default), `tol` tolerance used in stopping criteria (1e-5 by default), `nrep` number of repeats of the run (1 by default, require much longer if increased), `init` parameter initialization (NULL). The parallel is control by `future` R package, by default `sequential` plan is used. To enable parallel computation, set `future.plan='multicore` and set the `workers` as the number of cores to use. Note that Rstudio does not support 'multicore'.
 
 ```{r, eval=T}
-# takes roughly 20 minutes to run
-int.out = CFITIntegrate(X.list=exprs.list, r=15, max.niter = 100, seed=42, verbose=F)
-saveRDS(int.out, file='results/panc5_integration_output.rds')
+# integrate four largest datasets, takes roughly 20 minutes to run without parallization
+ref.data = c(1,2,3,5)
+int.out = CFITIntegrate(X.list=exprs.list[ref.data], r=15, max.niter=100, future.plan='sequential', seed=0, verbose=F)
+
+# For large datasets we recommende using the sketched version for fast convergence.
+# int.out = CFITIntegrate_sketched(X.list=exprs.list[ref.data], r=15, subsample.prop = 0.1,
+#                                  max.niter=100, early.stopping=10, tol=1e-8, 
+#                                  future.plan='sequential', seed=42, verbose=F)
 ```
 
 The output is a list containing
@@ -110,9 +117,9 @@ Hnorm = do.call(rbind, int.out$H.list) %*% diag(colSums(int.out$W))
 
 
 Visualize the integrated data via UMAP plot,
-```{r, eval=T, fig.align='center',fig.show="hold", fig.cap='Integrated pancreas islet cells data sests from five technologies.'}
-tech = do.call(c, lapply(data.list$metadata.list, function(x) x$tech))
-celltype = do.call(c, data.list$labels.list)
+```{r, eval=T, fig.align='center',fig.show="hold", fig.cap='Integrated pancreas islet cells data sests from four technologies.'}
+tech = do.call(c, lapply(data.list$metadata.list[ref.data], function(x) x$tech))
+celltype = do.call(c, data.list$labels.list[ref.data])
 umap.out = plot_umap(X=Hnorm, labels=celltype, 
                      pca = NULL, n_components = 2, n_neighbors = 50, min_dist = 0.1, # umap parameters
                      point.size = 0.6, alpha=0.8, title=NULL, legend.name='cell type', # figure parameters
@@ -135,28 +142,18 @@ alignment.score.out$alignment.per.dataset
 
 ## Data transfer
 
-We first integrate data sets from four technologies (inDrop, celseq, celseq2, SmartSeq2), and then transfer the learned factor matrix to the smallest dataset--fluidigmc1, which is from a very different technology from the other seven source data sets.
-
-
-```{r, eval=T}
-# perform integration to estimate Wref with data sets from 4 technologies
-# run time 20 min
-int.ref.out = CFITIntegrate(X.list=exprs.list[c(1,2,3,5)], r=15, max.niter = 100, seed=42, verbose=F)
-saveRDS(int.ref.out, file='results/panc_ref_integration_output.rds')
-```
-
-The learned common factor matrix, saved in `int.ref.out` is then transfer to the smallest data set, containing 638 cells from fluidigmc1 technology.
+Next we transfer the learned factor matrix to the smallest data set, containing 638 cells from fluidigmc1 technology.
 
 ```{r, eval=T}
 # transfer: run time 10 seconds
-tf.out = CFITTransfer(Xtarget=exprs.list[[4]], Wref=int.ref.out$W, max.niter = 100, seed=42, verbose=F)
+tf.out = CFITTransfer(Xtarget=exprs.list[[4]], Wref=int.out$W, max.niter = 100, seed=0, verbose=F)
 ```
 
 Visualize the transferred results via UMAP plot,
 ```{r, eval=T, fig.align='center',fig.show="hold", fig.cap='cFIT transfer results.'}
-Hnorm = rbind(do.call(rbind, int.ref.out$H.list), tf.out$H) %*% diag(colSums(int.ref.out$W))
-source = rep(c('reference','target'), c(nrow(do.call(rbind, int.ref.out$H.list)), nrow(tf.out$H)))
-celltype = do.call(c, c(data.list$labels.list[c(1,2,3,5)],data.list$labels.list[4]))
+Hnorm = rbind(do.call(rbind, int.out$H.list), tf.out$H) %*% diag(colSums(int.out$W))
+source = rep(c('reference','target'), c(nrow(do.call(rbind, int.out$H.list)), nrow(tf.out$H)))
+celltype = do.call(c, c(data.list$labels.list[ref.data],data.list$labels.list[4]))
 
 umap.out = plot_umap(X=Hnorm, labels=source, min_dist = 0.1, # umap parameters
                      point.size = 0.6, alpha=0.8, title=NULL, legend.name='source', 
@@ -173,9 +170,9 @@ p2
 Assign labels for each cell in the target data by querying the cell type of target cells within k nearest neighbors.
 
 ```{r, eval=T}
-est.labels = asign_labels(exprs.source=do.call(rbind, int.ref.out$H.list), 
+est.labels = asign_labels(exprs.source=do.call(rbind, int.out$H.list), 
                            exprs.target=tf.out$H, 
-                           labels.source=do.call(c, data.list$labels.list[c(1,2,3,5)]))
+                           labels.source=do.call(c, data.list$labels.list[ref.data]))
 plotContTable(est_label=est.labels, true_label=data.list$labels.list[[4]], ylab='Mapped type')
 ```
 
@@ -213,8 +210,7 @@ p2
 By cFIT we get the integrated results
 
 ```{r, eval=T}
-int.out = CFITIntegrate(X.list=data.out$X.list, r=6, max.niter = 100, seed=42, verbose=F) 
-saveRDS(int.out, file='results/simu_model_integration_output.rds') 
+int.out = CFITIntegrate(X.list=data.out$X.list, r=6, max.niter = 100, seed=0, verbose=F) 
 ```
 
 ```{r, eval=T, fig.align='center',fig.show="hold", fig.cap='Simulated data from assumed model with batch effects corrected applying cFIT.'}
@@ -243,83 +239,62 @@ The speed up version is implemented by `CFITIntegrate_sketched` function. The us
 
 We examine the performance of the speed up with the following experiments:
 ```{r, eval=F}
-# compare runing time with increasing sample per batch
-# Note that this experiment will takes hours!
-n.list=c(5000, 10000, 50000)
-subsample.prop.list = c(1, 0.5, 0.1, 0.01)
+n = 2e5
+subsample.prop.list = c(1,.1,.01,.001)
 
 ntask = 5 # five batches in total
 p = 500 # number of genes
 r = 10 # number of factors
+nrep = 1
+time.out = 120 # stop running after 120 minutes
 
-runtime.mat = matrix(NA, length(n.list), length(subsample.prop.list))
-obj.mat = matrix(NA, length(n.list),  length(subsample.prop.list))
-deltaw.mat = matrix(NA, length(n.list),  length(subsample.prop.list))
+runtime.mat = matrix(NA, nrep, length(subsample.prop.list))
+obj.mat = matrix(NA, nrep, length(subsample.prop.list))
 info.list = list()
 
 set.seed(42)
-
-for (i in 1:length(n.list)){
-    n = n.list[i]
-    message('Run experiment with n=',n)
-    data.out = generate_data(n=n, p=p, ntask=ntask, K=r, cl.sep=1, sig=2, batch.effect.sig=0.5, alpha=1)
-    
+data.out = generate_data(n=n, p=p, ntask=ntask, K=r, cl.sep=1, sig=2, batch.effect.sig=0.5, alpha=1)
+for(rep in 1:nrep){
+    message('repeat: ',rep)
     for (j in 1:length(subsample.prop.list)){
         subsample.prop = subsample.prop.list[j]
         message('subsample.prop=',subsample.prop,'...')
 
-        start.time = Sys.time()
         int.out = CFITIntegrate_sketched(X.list=data.out$X.list, r=r, verbose=T, subsample.prop=subsample.prop,
-                                         tol=1e-5, seed=42, max.niter=50, n.cores = 4)
-        end.time = Sys.time()
+                                         tol=1e-6*subsample.prop, early.stopping=50, time.out=time.out,
+                                         seed=rep, future.plan='sequential', max.niter=50/subsample.prop)
 
-        time = difftime(end.time, start.time,units = 'm')
+        time = int.out$time.elapsed
         message('Finish, run ', int.out$niter,' iters in time:', time,'.')
-        
-        runtime.mat[i, j] = time 
-        obj.mat[i,j] = int.out$obj
-        deltaw.mat[i,j] = int.out$deltaw
-        info.list = c(info.list,list(list(n = n, subsample.prop=subsample.prop, deltaw.history=int.out$deltaw.history)))
+
+        runtime.mat[rep,j] = time
+        obj.mat[rep,j] = int.out$obj
+        info.list = c(info.list,list(list(n = n,
+                                          subsample.prop = subsample.prop,
+                                          rep = rep,
+                                          deltaw.history = int.out$deltaw.history,
+                                          obj.history = int.out$obj.history,
+                                          time.elapse.history = int.out$time.elapse.history)))
     }
 }
-saveRDS(list(runtime.mat=runtime.mat, obj.mat=obj.mat, deltaw.mat=deltaw.mat, info.list=info.list,
-             n.list=n.list, subsample.prop.list=subsample.prop.list, p=p, ntask=ntask, r=r), 'results/simu_sketch.rds')
+res = list(runtime.mat=runtime.mat, obj.mat=obj.mat, info.list=info.list, n = n, 
+           subsample.prop.list=subsample.prop.list, p=p, ntask=ntask, r=r, nrep=nrep)
 ```
 
-Examine the results, including the run time, the objective functions
+Examine the objective function versus run time for different subsampling fraction used
 ```{r, eval=F}
-out = readRDS('results/simu_sketch.rds')
-runtime.mat=out$runtime.mat
-obj.mat=out$obj.mat
-deltaw.mat=out$deltaw.mat
-info.list=out$info.list
-n.list=out$n.list
-subsample.prop.list = out$subsample.prop.list
-ntask = out$ntask
-
-df = data.frame(runtime = c(runtime.mat), 
-                obj = c(obj.mat),
-                deltaw = c(deltaw.mat),
-                n = ntask * rep(n.list, ncol(runtime.mat)),
-                subsample =  rep(subsample.prop.list, each=nrow(runtime.mat)))
-
-p1 = ggplot(data=df) + geom_point(aes(x=as.character(subsample), y=runtime, color=as.factor(n))) + 
-        geom_line(aes(x=as.character(subsample), y=runtime, group=as.factor(n))) + 
-        labs(x='subsample proportion', y='run time (min)') +
-        scale_y_continuous(trans = "log10")+ 
-        labs(color = "sample size") + theme_light()
-
-p2 = ggplot(data=df) + geom_point(aes(x=as.character(subsample), y=obj, color=as.factor(n))) + 
-        geom_line(aes(x=as.character(subsample), y=obj, group=as.factor(n))) + 
-        labs(x='subsample proportion', y='objective function') +
-        scale_y_continuous(trans = "log10")
-        labs(color = "sample size") + theme_light()
-        
-p1+p2
+df = data.frame(subsample.prop = rep(as.character(res$subsample.prop.list), sapply(res$info.list, function(x) length(x$obj.history))),
+                obj = do.call(c, lapply(res$info.list, function(x) x$obj.history)),
+                time.elapsed = do.call(c, lapply(res$info.list, function(x) x$time.elapse.history)))
+df.plot = df[df$subsample.prop %in% c(1,.1,.01,.001),]
+ggplot(df.plot, aes(x = time.elapsed, y = obj, col=subsample.prop)) +
+    geom_point(alpha=0.8,stroke = 0) + geom_line(alpha=0.8) + theme_light() +
+    labs(color='subsample\nfraction', y='objective function', x='time elapsed (min)') +
+    scale_color_manual(values = c("#999999",  "#E69F00",  "#009E73","#56B4E9"))
 ```
 
-```{r, echo=F, fig.align='center',  fig.cap='Examine the run time (left) and objective function with sketched cFIT with varying subsampling fractions.'}
-knitr::include_graphics('fig/simu_sketched.png')
+```{r, echo=F, fig.align='center',  fig.cap='Examine the objective function versus run time using sketched cFIT with varying subsampling fractions.'}
+knitr::include_graphics('fig/sketched_simulation_200000_4_frac.png')
 ```
 
 # Reference
