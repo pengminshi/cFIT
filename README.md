@@ -7,7 +7,6 @@ cFIT (common Factor Space Integration & Transfer) is a tool for data integration
 
 ## Citation
 
-A preprint of the manuscript is available [here](https://www.biorxiv.org/content/10.1101/2020.08.31.276345v1)
 ```
 @article{peng2021integration,
   title={Integration and transfer learning of single-cell transcriptomes via cFIT},
